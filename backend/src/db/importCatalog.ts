@@ -146,8 +146,14 @@ export async function importCatalog(
 
 /** Читает и разбирает файл каталога. */
 export function readCatalogFile(filePath: string): unknown[] {
-  const absolute = path.resolve(process.cwd(), filePath);
-  if (!fs.existsSync(absolute)) throw new Error(`Файл не найден: ${absolute}`);
+  // Команда запускается из backend/, а каталог обычно лежит в корне репозитория.
+  const candidates = [
+    path.resolve(process.cwd(), filePath),
+    path.resolve(process.cwd(), '..', filePath),
+    path.resolve(__dirname, '..', '..', '..', filePath),
+  ];
+  const absolute = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!absolute) throw new Error(`Файл не найден: ${candidates[0]}`);
 
   const raw = fs.readFileSync(absolute, 'utf8');
   const parsed = JSON.parse(raw) as unknown;

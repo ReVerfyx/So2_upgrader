@@ -30,7 +30,7 @@ Telegram: [@stock2_shop](https://t.me/stock2_shop)
 | --- | --- |
 | Бэкенд | Node.js 20+, TypeScript, Express, PostgreSQL 16 (`pg`, без ORM), zod, bcryptjs |
 | Фронтенд | React 18, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query |
-| Тесты | Vitest + Supertest (114 тестов бэкенда, 14 фронтенда) |
+| Тесты | Vitest + Supertest (122 теста бэкенда, 14 фронтенда) |
 | Инфраструктура | Docker Compose, nginx, GitHub Actions |
 
 Дизайн-система построена по референсу upgrader.vip — см. [docs/reference.md](docs/reference.md).
@@ -247,6 +247,12 @@ npm run catalog:csv --workspace backend -- prices.csv
 `__NUXT__`), HTML-таблицы, повторяющиеся карточки и ваши CSS-селекторы.
 Тип оружия, редкость и состояние определяются по названию и цене.
 
+**Проще всего — через GitHub Actions.** Workflow «Каталог скинов»
+(`.github/workflows/catalog.yml`) сам сходит на сайты, соберёт прайс,
+проверит формат, приложит отчёт к запуску и, по флажку, закоммитит
+результат в `database/catalog.json`. Запуск: Actions → «Каталог скинов» →
+Run workflow. По расписанию — раз в неделю, чтобы цены не устаревали.
+
 Готовый файл загружается в базу:
 
 ```bash
@@ -410,7 +416,7 @@ npm run migrate
 ```bash
 npm run typecheck    # TypeScript обоих пакетов
 npm run lint         # ESLint
-npm run test         # Vitest: 114 тестов бэкенда + 14 фронтенда
+npm run test         # Vitest: 122 теста бэкенда + 14 фронтенда
 npm run build        # сборка backend и frontend
 ```
 
@@ -439,6 +445,18 @@ DATABASE_URL=postgres://postgres@127.0.0.1:5432/stock2_test npm run test --works
 
 Никаких секретов для CI не требуется — используется сервисный PostgreSQL
 и `TON_PROVIDER=mock`.
+
+### Каталог скинов (`.github/workflows/catalog.yml`)
+
+Сборка каталога из открытых источников — там, где есть интернет.
+Запускается вручную (Run workflow) или раз в неделю по расписанию.
+
+Шаги: разведка источников → сборка и объединение → проверка формата →
+отчёт в сводке задачи → артефакт `catalog.json` → коммит в репозиторий
+(по флажку) → загрузка в базу (если задан секрет `DATABASE_URL`).
+
+Источники перечислены в `database/sources.json`. Скрапер уважает
+`robots.txt` и выдерживает паузу между запросами.
 
 ### Deploy (`.github/workflows/deploy.yml`)
 

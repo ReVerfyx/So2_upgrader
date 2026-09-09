@@ -5,6 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { parsePrice, cleanName, looksLikeItemName, looksLikePrice, scrapeHtml, dedupe } from '../src/db/catalogSources';
 import {
+  expandPages,
+  isAllowedByRobots,
+  mergeSources,
+  resolveProjectFile,
   detectCondition,
   detectRarity,
   detectWeapon,
@@ -15,6 +19,7 @@ import {
   toSlug,
 } from '../src/db/buildCatalog';
 import { validateEntry } from '../src/db/importCatalog';
+import { afterEach, vi } from 'vitest';
 
 describe('Разбор цены', () => {
   it('понимает разные форматы', () => {
@@ -218,5 +223,78 @@ describe('Разбор CSV', () => {
 
   it('требует колонки с названием и ценой', () => {
     expect(() => parseCsv('a,b\n1,2')).toThrow(/название/i);
+  });
+});
+
+describe('Обход нескольких источников', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('разворачивает пагинацию', () => {
+    expect(expandPages('https://site/market?page={page}', '1-3')).toEqual([
+      'https://site/market?page=1',
+      'https://site/market?page=2',
+      'https://site/market?page=3',
+    ]);
+  });
+
+  it('без шаблона {page} возвращает исходный адрес', () => {
+    expect(expandPages('https://site/market', '1-5')).toEqual(['https://site/market']);
+  });
+
+  it('ограничивает количество страниц', () => {
+    expect(expandPages('https://site/?p={page}', '1-999').length).toBeLessThanOrEqual(200);
+  });
+
+  it('объединяет источники, оставляя минимальную цену', () => {
+    const merged = mergeSources(
+      [
+        { source: 'a', url: '', strategies: {}, items: [{ name: 'AKR | Дракон', priceCoins: 9500, strategy: 'json' }] },
+        { source: 'b', url: '', strategies: {}, items: [{ name: 'AKR | Дракон', priceCoins: 9100, strategy: 'table' }] },
+        { source: 'c', url: '', strategies: {}, items: [{ name: 'USP | Карбон', priceCoins: 60, strategy: 'table' }] },
+      ],
+      'min',
+    );
+
+    expect(merged).toHaveLength(2);
+    expect(merged.find((item) => item.name.includes('Дракон'))?.priceCoins).toBe(9100);
+  });
+
+  it('в режиме first берёт цену первого источника', () => {
+    const merged = mergeSources(
+      [
+        { source: 'a', url: '', strategies: {}, items: [{ name: 'AKR | Дракон', priceCoins: 9500, strategy: 'json' }] },
+        { source: 'b', url: '', strategies: {}, items: [{ name: 'AKR | Дракон', priceCoins: 9100, strategy: 'table' }] },
+      ],
+      'first',
+    );
+    expect(merged[0]?.priceCoins).toBe(9500);
+  });
+
+  it('уважает запрет в robots.txt', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => 'User-agent: *\nDisallow: /market',
+      })) as unknown as typeof fetch,
+    );
+
+    await expect(isAllowedByRobots('https://site.example/market/page')).resolves.toBe(false);
+    await expect(isAllowedByRobots('https://site.example/catalog')).resolves.toBe(true);
+  });
+
+  it('разрешает обход, если robots.txt недоступен', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('нет сети');
+      }) as unknown as typeof fetch,
+    );
+    await expect(isAllowedByRobots('https://site.example/market')).resolves.toBe(true);
+  });
+
+  it('находит файлы проекта из папки backend', () => {
+    expect(resolveProjectFile('database/weapons.json')).toMatch(/database\/weapons\.json$/);
   });
 });

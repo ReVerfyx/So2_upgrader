@@ -18,24 +18,45 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { scrapeHtml, parsePrice, cleanName, type ScrapeConfig, type ScrapedItem } from './catalogSources';
+import { scrapeHtml, parsePrice, cleanName, dedupe, type ScrapeConfig, type ScrapedItem } from './catalogSources';
 import type { CatalogEntry } from './importCatalog';
 
 /* ------------------------------ Аргументы CLI ----------------------------- */
 
 interface Args {
   command: string;
+  /** Один или несколько адресов через запятую. */
   url?: string;
+  /** Файл со списком источников (database/sources.json). */
+  sources?: string;
   file?: string;
   config?: string;
   out: string;
   limit: number;
   priceMultiplier?: number;
   defaultRarity?: string;
+  /** Диапазон страниц пагинации, например 1-10 (в URL подставляется {page}). */
+  pages?: string;
+  /** Пауза между запросами, мс — вежливый обход. */
+  delayMs: number;
+  /** Если скрап ничего не дал — сгенерировать каталог из справочника. */
+  fallbackGenerate: boolean;
+  /** Как объединять источники: min — минимальная цена, first — первый источник. */
+  merge: 'min' | 'first';
+  /** Уважать ли robots.txt (по умолчанию да). */
+  respectRobots: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { command: argv[0] ?? 'help', out: 'catalog.json', limit: 5000 };
+  const args: Args = {
+    command: argv[0] ?? 'help',
+    out: 'catalog.json',
+    limit: 5000,
+    delayMs: 1200,
+    fallbackGenerate: false,
+    merge: 'min',
+    respectRobots: true,
+  };
 
   for (let i = 1; i < argv.length; i += 1) {
     const key = argv[i];
@@ -68,6 +89,28 @@ function parseArgs(argv: string[]): Args {
       case '--rarity':
         args.defaultRarity = value;
         i += 1;
+        break;
+      case '--sources':
+        args.sources = value;
+        i += 1;
+        break;
+      case '--pages':
+        args.pages = value;
+        i += 1;
+        break;
+      case '--delay':
+        args.delayMs = Number(value) || 1200;
+        i += 1;
+        break;
+      case '--merge':
+        args.merge = value === 'first' ? 'first' : 'min';
+        i += 1;
+        break;
+      case '--fallback-generate':
+        args.fallbackGenerate = true;
+        break;
+      case '--ignore-robots':
+        args.respectRobots = false;
         break;
       default:
         if (!key?.startsWith('--') && !args.file && args.command === 'csv') args.file = key;
@@ -230,84 +273,323 @@ export function toCatalogEntry(item: ScrapedItem, options: { defaultRarity?: str
 
 /* --------------------------------- Режимы -------------------------------- */
 
-async function loadHtml(args: Args): Promise<string> {
-  if (args.file) {
-    const absolute = path.resolve(process.cwd(), args.file);
-    if (!fs.existsSync(absolute)) throw new Error(`Файл не найден: ${absolute}`);
-    return fs.readFileSync(absolute, 'utf8');
-  }
+/** Пауза между запросами: не создаём нагрузку на чужой сайт. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  if (!args.url) throw new Error('Укажите --url адрес страницы или --file путь к сохранённой странице');
+const USER_AGENT = 'Mozilla/5.0 (compatible; StockTwoCatalogBot/1.0; +https://github.com/stock2/catalog-bot)';
 
-  const response = await fetch(args.url, {
+/** Загружает страницу с браузерными заголовками. */
+async function fetchPage(url: string): Promise<string> {
+  const response = await fetch(url, {
     headers: {
-      // Некоторые сайты отдают пустую страницу без привычных заголовков браузера.
-      'User-Agent': 'Mozilla/5.0 (compatible; StockTwoCatalogBot/1.0)',
+      'User-Agent': USER_AGENT,
       'Accept-Language': 'ru-RU,ru;q=0.9',
-      Accept: 'text/html,application/xhtml+xml',
+      Accept: 'text/html,application/xhtml+xml,application/json',
     },
+    redirect: 'follow',
     signal: AbortSignal.timeout(30_000),
   });
 
-  if (!response.ok) throw new Error(`Сайт вернул статус ${response.status}`);
+  if (!response.ok) throw new Error(`статус ${response.status}`);
   return response.text();
+}
+
+/**
+ * Проверяет robots.txt сайта.
+ * Мы читаем чужие страницы, поэтому по умолчанию уважаем запреты владельца.
+ * Отключается флагом --ignore-robots (только если у вас есть разрешение).
+ */
+export async function isAllowedByRobots(targetUrl: string): Promise<boolean> {
+  try {
+    const url = new URL(targetUrl);
+    const response = await fetch(`${url.origin}/robots.txt`, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return true; // нет robots.txt — ограничений нет
+
+    const text = await response.text();
+    const lines = text.split(/\r?\n/).map((line) => line.trim());
+
+    let applies = false;
+    const disallowed: string[] = [];
+
+    for (const line of lines) {
+      const [rawKey, ...rest] = line.split(':');
+      const key = rawKey?.trim().toLowerCase();
+      const value = rest.join(':').trim();
+
+      if (key === 'user-agent') applies = value === '*' || USER_AGENT.toLowerCase().includes(value.toLowerCase());
+      else if (key === 'disallow' && applies && value) disallowed.push(value);
+    }
+
+    return !disallowed.some((rule) => url.pathname.startsWith(rule));
+  } catch {
+    return true; // не смогли проверить — не блокируем работу
+  }
+}
+
+/** Разворачивает шаблон пагинации: "https://site/market?page={page}" + "1-5". */
+export function expandPages(url: string, pages?: string): string[] {
+  if (!pages || !url.includes('{page}')) return [url.replace('{page}', '1')];
+
+  const match = /^(\d+)\s*-\s*(\d+)$/.exec(pages.trim());
+  if (!match) return [url.replace('{page}', pages.trim())];
+
+  const from = Number(match[1]);
+  const to = Math.min(Number(match[2]), from + 199); // предохранитель
+  const list: string[] = [];
+  for (let page = from; page <= to; page += 1) list.push(url.replace('{page}', String(page)));
+  return list;
+}
+
+interface SourceDefinition {
+  name?: string;
+  url: string;
+  pages?: string;
+  config?: ScrapeConfig;
+  priceMultiplier?: number;
+  enabled?: boolean;
+}
+
+/**
+ * Ищет файл относительно текущей папки и корня репозитория.
+ * Команды запускаются из backend/, а данные лежат в database/ в корне.
+ */
+export function resolveProjectFile(file: string): string {
+  const candidates = [
+    path.resolve(process.cwd(), file),
+    path.resolve(process.cwd(), '..', file),
+    path.resolve(__dirname, '..', '..', '..', file),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
+}
+
+/** Читает список источников из файла. */
+function loadSources(file: string): SourceDefinition[] {
+  const absolute = resolveProjectFile(file);
+  if (!fs.existsSync(absolute)) throw new Error(`Файл источников не найден: ${absolute}`);
+
+  const parsed = JSON.parse(fs.readFileSync(absolute, 'utf8')) as { sources?: SourceDefinition[] } | SourceDefinition[];
+  const list = Array.isArray(parsed) ? parsed : (parsed.sources ?? []);
+  return list.filter((source) => source.enabled !== false && source.url);
 }
 
 function loadConfig(file?: string): ScrapeConfig {
   if (!file) return {};
-  const absolute = path.resolve(process.cwd(), file);
+  const absolute = resolveProjectFile(file);
   if (!fs.existsSync(absolute)) throw new Error(`Файл конфигурации не найден: ${absolute}`);
   return JSON.parse(fs.readFileSync(absolute, 'utf8')) as ScrapeConfig;
 }
 
-async function commandScrape(args: Args, inspectOnly: boolean): Promise<void> {
-  const html = await loadHtml(args);
-  const config = loadConfig(args.config);
-  if (args.priceMultiplier) config.priceMultiplier = args.priceMultiplier;
+export interface SourceResult {
+  source: string;
+  url: string;
+  items: ScrapedItem[];
+  strategies: Record<string, number>;
+  error?: string;
+}
 
-  const report = scrapeHtml(html, config);
+/** Обходит один источник (со всеми страницами пагинации). */
+async function scrapeSource(source: SourceDefinition, args: Args): Promise<SourceResult> {
+  const name = source.name ?? new URL(source.url).hostname;
+  const result: SourceResult = { source: name, url: source.url, items: [], strategies: {} };
 
-  console.log(`Размер страницы: ${(html.length / 1024).toFixed(0)} КБ`);
-  console.log('Распознано записей по стратегиям:', report.byStrategy);
-  console.log(`Итоговый набор: ${report.items.length} предметов`);
+  try {
+    if (args.respectRobots && !(await isAllowedByRobots(source.url))) {
+      result.error = 'запрещено robots.txt (обход отключён; используйте --ignore-robots, если есть разрешение)';
+      return result;
+    }
 
-  if (report.items.length === 0) {
-    console.log('\nНе удалось распознать предметы автоматически.');
-    console.log('Сохраните страницу (Ctrl+S) и запустите с --file page.html,');
-    console.log('либо задайте селекторы в файле конфигурации:');
-    console.log(
-      JSON.stringify(
-        {
-          itemSelector: '.market-item',
-          nameSelector: '.market-item__title',
-          priceSelector: '.market-item__price',
-          imageSelector: 'img',
-          priceMultiplier: 1,
-        },
-        null,
-        2,
-      ),
-    );
-    process.exitCode = 1;
-    return;
+    const urls = expandPages(source.url, source.pages ?? args.pages);
+    const config: ScrapeConfig = { ...(source.config ?? {}) };
+    if (source.priceMultiplier ?? args.priceMultiplier) {
+      config.priceMultiplier = source.priceMultiplier ?? args.priceMultiplier;
+    }
+
+    for (const [index, url] of urls.entries()) {
+      if (index > 0) await sleep(args.delayMs);
+
+      try {
+        const html = await fetchPage(url);
+        const report = scrapeHtml(html, config);
+
+        result.items.push(...report.items);
+        Object.entries(report.byStrategy).forEach(([strategy, count]) => {
+          result.strategies[strategy] = (result.strategies[strategy] ?? 0) + count;
+        });
+
+        // Пагинация закончилась: страница без предметов — дальше идти незачем.
+        if (report.items.length === 0 && index > 0) break;
+      } catch (error) {
+        if (index === 0) throw error;
+        break; // на последующих страницах ошибка означает конец списка
+      }
+    }
+
+    result.items = dedupe(result.items);
+  } catch (error) {
+    result.error = (error as Error).message;
   }
 
-  const preview = report.items.slice(0, 12);
-  console.log('\nПримеры распознанного:');
-  preview.forEach((item) => {
-    const entry = toCatalogEntry(item, { defaultRarity: args.defaultRarity });
-    console.log(`  ${entry.name} — ${entry.priceCoins} монет · ${entry.weapon} · ${entry.rarity}`);
+  return result;
+}
+
+/** Объединяет результаты нескольких источников. */
+export function mergeSources(results: SourceResult[], strategy: 'min' | 'first'): ScrapedItem[] {
+  const map = new Map<string, ScrapedItem>();
+
+  for (const result of results) {
+    for (const item of result.items) {
+      const key = item.name.toLowerCase();
+      const existing = map.get(key);
+
+      if (!existing) {
+        map.set(key, item);
+        continue;
+      }
+      if (strategy === 'min' && item.priceCoins < existing.priceCoins) map.set(key, item);
+    }
+  }
+
+  return [...map.values()];
+}
+
+async function loadHtml(args: Args): Promise<string> {
+  if (!args.file) throw new Error('Укажите --file путь к сохранённой странице');
+  const absolute = resolveProjectFile(args.file);
+  if (!fs.existsSync(absolute)) throw new Error(`Файл не найден: ${absolute}`);
+  return fs.readFileSync(absolute, 'utf8');
+}
+
+async function commandScrape(args: Args, inspectOnly: boolean): Promise<void> {
+  // Источники: файл со списком, адреса через запятую или сохранённый файл.
+  let sources: SourceDefinition[] = [];
+
+  if (args.sources) {
+    sources = loadSources(args.sources);
+  } else if (args.url) {
+    const config = loadConfig(args.config);
+    sources = args.url
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean)
+      .map((url) => ({ url, config, pages: args.pages }));
+  }
+
+  const results: SourceResult[] = [];
+
+  if (sources.length > 0) {
+    console.log(`Источников к обходу: ${sources.length}`);
+    for (const source of sources) {
+      const result = await scrapeSource(source, args);
+      results.push(result);
+
+      const status = result.error ? `ошибка: ${result.error}` : `найдено ${result.items.length}`;
+      console.log(`  • ${result.source} — ${status}`);
+      await sleep(args.delayMs);
+    }
+  } else {
+    // Разбор сохранённой страницы
+    const html = await loadHtml(args);
+    const report = scrapeHtml(html, loadConfig(args.config));
+    results.push({ source: args.file ?? 'файл', url: args.file ?? '', items: report.items, strategies: report.byStrategy });
+    console.log(`Из файла распознано: ${report.items.length}`);
+  }
+
+  const merged = mergeSources(results, args.merge);
+  const entries = merged
+    .slice(0, args.limit)
+    .map((item) => toCatalogEntry(item, { defaultRarity: args.defaultRarity }));
+
+  console.log(`\nИтог: ${entries.length} предметов из ${results.length} источников`);
+  results.forEach((result) => {
+    if (Object.keys(result.strategies).length > 0) {
+      console.log(`  ${result.source}: ${JSON.stringify(result.strategies)}`);
+    }
   });
 
-  if (inspectOnly) {
-    console.log('\nРежим проверки: файл не записан. Уберите команду inspect, чтобы сохранить каталог.');
+  if (entries.length > 0) {
+    console.log('\nПримеры:');
+    entries.slice(0, 10).forEach((entry) => {
+      console.log(`  ${entry.name} — ${entry.priceCoins} монет · ${entry.weapon} · ${entry.rarity}`);
+    });
+  }
+
+  writeReport(results, entries);
+
+  if (entries.length === 0) {
+    console.log('\nНи один источник не дал результата.');
+    console.log('Что можно сделать:');
+    console.log('  1) сохранить страницу (Ctrl+S) и запустить с --file page.html');
+    console.log('  2) задать CSS-селекторы через --config (см. database/scraper.example.json)');
+    console.log('  3) собрать каталог из справочника: npm run catalog:generate');
+
+    if (args.fallbackGenerate && !inspectOnly) {
+      console.log('\nВключён запасной вариант — генерирую каталог из справочника оружия.');
+      commandGenerate(args);
+      return;
+    }
+
+    process.exitCode = inspectOnly ? 0 : 1;
     return;
   }
 
-  writeCatalog(
-    report.items.slice(0, args.limit).map((item) => toCatalogEntry(item, { defaultRarity: args.defaultRarity })),
-    args.out,
-  );
+  if (inspectOnly) {
+    console.log('\nРежим проверки: файл не записан.');
+    return;
+  }
+
+  writeCatalog(entries, args.out);
+}
+
+/** Экранирует символ | — иначе он разрывает ячейку markdown-таблицы. */
+function escapeCell(text: string): string {
+  return text.replace(/\|/g, '\\|');
+}
+
+/** Пишет отчёт для GitHub Actions (шаг summary) и для локального просмотра. */
+function writeReport(results: SourceResult[], entries: CatalogEntry[]): void {
+  const lines: string[] = [];
+  lines.push('## Сборка каталога скинов', '');
+  lines.push('| Источник | Найдено | Стратегии | Ошибка |');
+  lines.push('| --- | ---: | --- | --- |');
+
+  results.forEach((result) => {
+    const strategies = Object.entries(result.strategies)
+      .map(([key, count]) => `${key}: ${count}`)
+      .join(', ');
+    lines.push(
+      `| ${escapeCell(result.source)} | ${result.items.length} | ${strategies || '—'} | ${escapeCell(result.error ?? '—')} |`,
+    );
+  });
+
+  lines.push('', `**Итого предметов: ${entries.length}**`, '');
+
+  if (entries.length > 0) {
+    const prices = entries.map((entry) => Number(entry.priceCoins));
+    lines.push(`Диапазон цен: ${Math.min(...prices).toFixed(0)} – ${Math.max(...prices).toFixed(0)} монет`, '');
+    lines.push('| Предмет | Цена, монет | Оружие | Редкость |');
+    lines.push('| --- | ---: | --- | --- |');
+    entries
+      .slice()
+      .sort((a, b) => Number(b.priceCoins) - Number(a.priceCoins))
+      .slice(0, 15)
+      .forEach((entry) => {
+        lines.push(
+          `| ${escapeCell(entry.name)} | ${Number(entry.priceCoins).toFixed(0)} | ${escapeCell(entry.weapon)} | ${entry.rarity} |`,
+        );
+      });
+  }
+
+  const report = lines.join('\n');
+  fs.writeFileSync(path.resolve(process.cwd(), 'catalog-report.md'), report, 'utf8');
+
+  // GitHub Actions: добавляем отчёт в сводку задачи.
+  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+  if (summaryFile) fs.appendFileSync(summaryFile, `${report}\n`, 'utf8');
 }
 
 /** Разбор CSV: колонки name/price обязательны, остальные необязательны. */
@@ -348,7 +630,7 @@ export function parseCsv(content: string): ScrapedItem[] {
 
 function commandCsv(args: Args): void {
   if (!args.file) throw new Error('Укажите путь к CSV-файлу');
-  const absolute = path.resolve(process.cwd(), args.file);
+  const absolute = resolveProjectFile(args.file);
   if (!fs.existsSync(absolute)) throw new Error(`Файл не найден: ${absolute}`);
 
   const items = parseCsv(fs.readFileSync(absolute, 'utf8'));
@@ -379,9 +661,7 @@ export function priceJitter(seed: string): number {
 }
 
 function commandGenerate(args: Args): void {
-  const file = path.resolve(process.cwd(), 'database/weapons.json');
-  const fallback = path.resolve(__dirname, '..', '..', '..', 'database', 'weapons.json');
-  const source = fs.existsSync(file) ? file : fallback;
+  const source = resolveProjectFile('database/weapons.json');
   if (!fs.existsSync(source)) throw new Error('Не найден справочник database/weapons.json');
 
   const data = JSON.parse(fs.readFileSync(source, 'utf8')) as WeaponsFile;
@@ -440,12 +720,20 @@ function pickCondition(rarity: string, seed: string, factors: Record<string, num
 
 /* --------------------------------- Запись -------------------------------- */
 
+function resolveOutPath(out: string): string {
+  if (path.isAbsolute(out)) return out;
+  // Путь вида database/catalog.json пишем в корень репозитория.
+  const inRepoRoot = path.resolve(process.cwd(), '..', out);
+  if (out.includes('/') && fs.existsSync(path.dirname(inRepoRoot))) return inRepoRoot;
+  return path.resolve(process.cwd(), out);
+}
+
 function writeCatalog(entries: CatalogEntry[], out: string): void {
   const unique = new Map<string, CatalogEntry>();
   entries.forEach((entry) => unique.set(entry.slug, entry));
 
   const list = [...unique.values()].sort((a, b) => Number(a.priceCoins) - Number(b.priceCoins));
-  const absolute = path.resolve(process.cwd(), out);
+  const absolute = resolveOutPath(out);
 
   fs.writeFileSync(
     absolute,

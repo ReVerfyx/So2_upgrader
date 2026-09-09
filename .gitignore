@@ -42,5 +42,7 @@ docker/pgdata/
 .idea/
 .DS_Store
 Thumbs.db
-/backend/catalog.json
-catalog.json
+
+# Отчёт сборщика каталога (генерируется при каждом запуске)
+backend/catalog-report.md
+catalog-report.md

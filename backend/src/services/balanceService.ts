@@ -27,17 +27,17 @@ export type TransactionType =
   | 'test_credit';
 
 export interface BalanceSnapshot {
-  amountNano: bigint;
-  lockedNano: bigint;
+  amountMinor: bigint;
+  lockedMinor: bigint;
   currency: string;
 }
 
 export interface LedgerEntry {
   id: string;
   type: TransactionType;
-  amountNano: bigint;
-  balanceBeforeNano: bigint;
-  balanceAfterNano: bigint;
+  amountMinor: bigint;
+  balanceBeforeMinor: bigint;
+  balanceAfterMinor: bigint;
   status: string;
   referenceType: string | null;
   referenceId: string | null;
@@ -47,22 +47,22 @@ export interface LedgerEntry {
 }
 
 interface BalanceRow {
-  amount_nano: string;
-  locked_nano: string;
+  amount_minor: string;
+  locked_minor: string;
   currency: string;
 }
 
 /** Читает баланс без блокировки (для отображения). */
 export async function getBalance(userId: string, db: PoolClient | undefined = undefined): Promise<BalanceSnapshot> {
   const row = await queryOne<BalanceRow>(
-    `SELECT amount_nano, locked_nano, currency FROM balances WHERE user_id = $1 AND currency = 'TON'`,
+    `SELECT amount_minor, locked_minor, currency FROM balances WHERE user_id = $1 AND currency = 'TON'`,
     [userId],
     db,
   );
-  if (!row) return { amountNano: 0n, lockedNano: 0n, currency: 'TON' };
+  if (!row) return { amountMinor: 0n, lockedMinor: 0n, currency: 'TON' };
   return {
-    amountNano: toBigInt(row.amount_nano),
-    lockedNano: toBigInt(row.locked_nano),
+    amountMinor: toBigInt(row.amount_minor),
+    lockedMinor: toBigInt(row.locked_minor),
     currency: row.currency,
   };
 }
@@ -70,7 +70,7 @@ export async function getBalance(userId: string, db: PoolClient | undefined = un
 /** Блокирует строку баланса до конца транзакции. Создаёт её при отсутствии. */
 export async function lockBalance(userId: string, client: PoolClient): Promise<BalanceSnapshot> {
   let row = await queryOne<BalanceRow>(
-    `SELECT amount_nano, locked_nano, currency FROM balances
+    `SELECT amount_minor, locked_minor, currency FROM balances
       WHERE user_id = $1 AND currency = 'TON' FOR UPDATE`,
     [userId],
     client,
@@ -82,15 +82,15 @@ export async function lockBalance(userId: string, client: PoolClient): Promise<B
       client,
     );
     row = await queryOne<BalanceRow>(
-      `SELECT amount_nano, locked_nano, currency FROM balances
+      `SELECT amount_minor, locked_minor, currency FROM balances
         WHERE user_id = $1 AND currency = 'TON' FOR UPDATE`,
       [userId],
       client,
     );
   }
   return {
-    amountNano: toBigInt(row!.amount_nano),
-    lockedNano: toBigInt(row!.locked_nano),
+    amountMinor: toBigInt(row!.amount_minor),
+    lockedMinor: toBigInt(row!.locked_minor),
     currency: row!.currency,
   };
 }
@@ -98,7 +98,7 @@ export async function lockBalance(userId: string, client: PoolClient): Promise<B
 export interface ApplyChangeParams {
   userId: string;
   /** Положительная сумма — начисление, отрицательная — списание. */
-  amountNano: bigint;
+  amountMinor: bigint;
   type: TransactionType;
   referenceType?: string;
   referenceId?: string;
@@ -109,8 +109,8 @@ export interface ApplyChangeParams {
 
 export interface ApplyChangeResult {
   transactionId: string;
-  balanceBeforeNano: bigint;
-  balanceAfterNano: bigint;
+  balanceBeforeMinor: bigint;
+  balanceAfterMinor: bigint;
 }
 
 /**
@@ -122,28 +122,28 @@ export async function applyBalanceChange(
   client: PoolClient,
 ): Promise<ApplyChangeResult> {
   const before = await lockBalance(params.userId, client);
-  const after = before.amountNano + params.amountNano;
+  const after = before.amountMinor + params.amountMinor;
 
   if (after < 0n) {
     throw conflict('Недостаточно средств на балансе', 'INSUFFICIENT_FUNDS');
   }
 
   await query(
-    `UPDATE balances SET amount_nano = $2, updated_at = now() WHERE user_id = $1 AND currency = 'TON'`,
+    `UPDATE balances SET amount_minor = $2, updated_at = now() WHERE user_id = $1 AND currency = 'TON'`,
     [params.userId, after.toString()],
     client,
   );
 
   const row = await queryOne<{ id: string }>(
-    `INSERT INTO transactions (user_id, type, amount_nano, balance_before_nano, balance_after_nano,
+    `INSERT INTO transactions (user_id, type, amount_minor, balance_before_minor, balance_after_minor,
                                status, reference_type, reference_id, tx_hash, metadata)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
      RETURNING id`,
     [
       params.userId,
       params.type,
-      params.amountNano.toString(),
-      before.amountNano.toString(),
+      params.amountMinor.toString(),
+      before.amountMinor.toString(),
       after.toString(),
       params.status ?? 'completed',
       params.referenceType ?? null,
@@ -154,15 +154,15 @@ export async function applyBalanceChange(
     client,
   );
 
-  return { transactionId: row!.id, balanceBeforeNano: before.amountNano, balanceAfterNano: after };
+  return { transactionId: row!.id, balanceBeforeMinor: before.amountMinor, balanceAfterMinor: after };
 }
 
 interface TransactionRow {
   id: string;
   type: TransactionType;
-  amount_nano: string;
-  balance_before_nano: string;
-  balance_after_nano: string;
+  amount_minor: string;
+  balance_before_minor: string;
+  balance_after_minor: string;
   status: string;
   reference_type: string | null;
   reference_id: string | null;
@@ -175,9 +175,9 @@ function mapTransaction(row: TransactionRow): LedgerEntry {
   return {
     id: row.id,
     type: row.type,
-    amountNano: toBigInt(row.amount_nano),
-    balanceBeforeNano: toBigInt(row.balance_before_nano),
-    balanceAfterNano: toBigInt(row.balance_after_nano),
+    amountMinor: toBigInt(row.amount_minor),
+    balanceBeforeMinor: toBigInt(row.balance_before_minor),
+    balanceAfterMinor: toBigInt(row.balance_after_minor),
     status: row.status,
     referenceType: row.reference_type,
     referenceId: row.reference_id,

@@ -6,7 +6,7 @@
 import { pool } from '../db/pool';
 import { query, queryOne, withTransaction, type Db } from '../db/tx';
 import { badRequest, conflict, notFound } from '../lib/errors';
-import { money, toBigInt, type MoneyDto } from '../lib/money';
+import { money, toBigInt, tonMoney, type MoneyDto } from '../lib/money';
 import { sanitizeText } from '../lib/validate';
 import { applyBalanceChange } from './balanceService';
 import { revokeAllUserSessions } from './authService';
@@ -37,7 +37,7 @@ interface AdminUserRow {
   is_blocked: boolean;
   block_reason: string | null;
   external_provider: string | null;
-  amount_nano: string | null;
+  amount_minor: string | null;
   inventory_count: string;
   upgrades_count: string;
   deposited_total: string | null;
@@ -54,7 +54,7 @@ function mapAdminUser(row: AdminUserRow): AdminUserDto {
     role: row.role,
     isBlocked: row.is_blocked,
     blockReason: row.block_reason,
-    balance: money(toBigInt(row.amount_nano ?? '0')),
+    balance: money(toBigInt(row.amount_minor ?? '0')),
     inventoryCount: Number(row.inventory_count),
     upgradesCount: Number(row.upgrades_count),
     depositedTotal: money(toBigInt(row.deposited_total ?? '0')),
@@ -92,10 +92,10 @@ export async function listUsers(params: {
   const rows = await query<AdminUserRow>(
     `SELECT u.id, u.username, u.display_name, u.email, u.role, u.is_blocked, u.block_reason,
             u.external_provider, u.created_at, u.last_login_at,
-            b.amount_nano,
+            b.amount_minor,
             (SELECT count(*)::text FROM inventory inv WHERE inv.user_id = u.id AND inv.status = 'available') AS inventory_count,
             (SELECT count(*)::text FROM upgrades up WHERE up.user_id = u.id) AS upgrades_count,
-            (SELECT coalesce(sum(d.received_nano), 0)::text FROM deposits d WHERE d.user_id = u.id AND d.status = 'confirmed') AS deposited_total
+            (SELECT coalesce(sum(d.credited_minor), 0)::text FROM deposits d WHERE d.user_id = u.id AND d.status = 'confirmed') AS deposited_total
        FROM users u
        LEFT JOIN balances b ON b.user_id = u.id AND b.currency = 'TON'
        ${where}
@@ -114,10 +114,10 @@ export async function getUserDetails(userId: string): Promise<AdminUserDto> {
 
   const row = await queryOne<AdminUserRow>(
     `SELECT u.id, u.username, u.display_name, u.email, u.role, u.is_blocked, u.block_reason,
-            u.external_provider, u.created_at, u.last_login_at, b.amount_nano,
+            u.external_provider, u.created_at, u.last_login_at, b.amount_minor,
             (SELECT count(*)::text FROM inventory inv WHERE inv.user_id = u.id AND inv.status = 'available') AS inventory_count,
             (SELECT count(*)::text FROM upgrades up WHERE up.user_id = u.id) AS upgrades_count,
-            (SELECT coalesce(sum(d.received_nano), 0)::text FROM deposits d WHERE d.user_id = u.id AND d.status = 'confirmed') AS deposited_total
+            (SELECT coalesce(sum(d.credited_minor), 0)::text FROM deposits d WHERE d.user_id = u.id AND d.status = 'confirmed') AS deposited_total
        FROM users u
        LEFT JOIN balances b ON b.user_id = u.id AND b.currency = 'TON'
       WHERE u.id = $1`,
@@ -151,13 +151,13 @@ export async function setUserBlocked(params: {
 /** Ручная корректировка баланса с обязательным комментарием. */
 export async function adjustBalance(params: {
   userId: string;
-  amountNano: bigint;
+  amountMinor: bigint;
   reason: string;
   adminId: string;
 }): Promise<{ balance: MoneyDto; transactionId: string }> {
   const reason = sanitizeText(params.reason, 300);
   if (reason.length < 3) throw badRequest('Укажите причину корректировки', 'REASON_REQUIRED');
-  if (params.amountNano === 0n) throw badRequest('Сумма корректировки не может быть нулевой', 'ZERO_AMOUNT');
+  if (params.amountMinor === 0n) throw badRequest('Сумма корректировки не может быть нулевой', 'ZERO_AMOUNT');
 
   return withTransaction(async (client) => {
     const user = await queryOne<{ id: string }>('SELECT id FROM users WHERE id = $1 FOR UPDATE', [params.userId], client);
@@ -166,7 +166,7 @@ export async function adjustBalance(params: {
     const result = await applyBalanceChange(
       {
         userId: params.userId,
-        amountNano: params.amountNano,
+        amountMinor: params.amountMinor,
         type: 'admin_adjust',
         referenceType: 'admin',
         referenceId: params.adminId,
@@ -175,7 +175,7 @@ export async function adjustBalance(params: {
       client,
     );
 
-    return { balance: money(result.balanceAfterNano), transactionId: result.transactionId };
+    return { balance: money(result.balanceAfterMinor), transactionId: result.transactionId };
   });
 }
 
@@ -186,17 +186,17 @@ export async function grantItem(params: {
   adminId: string;
 }): Promise<{ inventoryId: string }> {
   return withTransaction(async (client) => {
-    const item = await queryOne<{ id: string; price_nano: string; condition: string }>(
-      'SELECT id, price_nano, condition FROM items WHERE id = $1',
+    const item = await queryOne<{ id: string; price_minor: string; condition: string }>(
+      'SELECT id, price_minor, condition FROM items WHERE id = $1',
       [params.itemId],
       client,
     );
     if (!item) throw notFound('Предмет не найден', 'ITEM_NOT_FOUND');
 
     const row = await queryOne<{ id: string }>(
-      `INSERT INTO inventory (user_id, item_id, price_nano, condition, acquired_from, source_id)
+      `INSERT INTO inventory (user_id, item_id, price_minor, condition, acquired_from, source_id)
        VALUES ($1, $2, $3, $4, 'admin', $5) RETURNING id`,
-      [params.userId, item.id, item.price_nano, item.condition, params.adminId],
+      [params.userId, item.id, item.price_minor, item.condition, params.adminId],
       client,
     );
     return { inventoryId: row!.id };
@@ -318,10 +318,10 @@ export async function getAdminStats(): Promise<AdminStats> {
       (SELECT count(*)::text FROM users) AS users_total,
       (SELECT count(*)::text FROM users WHERE is_blocked) AS users_blocked,
       (SELECT count(*)::text FROM users WHERE created_at > now() - interval '1 day') AS users_new,
-      (SELECT coalesce(sum(amount_nano), 0)::text FROM balances) AS balance_total,
+      (SELECT coalesce(sum(amount_minor), 0)::text FROM balances) AS balance_total,
       (SELECT count(*)::text FROM deposits WHERE status = 'pending') AS deposits_pending,
-      (SELECT coalesce(sum(received_nano), 0)::text FROM deposits WHERE status = 'confirmed') AS deposits_total,
-      (SELECT coalesce(sum(received_nano), 0)::text FROM deposits WHERE status = 'confirmed' AND confirmed_at > now() - interval '1 day') AS deposits_today,
+      (SELECT coalesce(sum(credited_minor), 0)::text FROM deposits WHERE status = 'confirmed') AS deposits_total,
+      (SELECT coalesce(sum(credited_minor), 0)::text FROM deposits WHERE status = 'confirmed' AND confirmed_at > now() - interval '1 day') AS deposits_today,
       (SELECT count(*)::text FROM withdrawals WHERE status = 'pending') AS wd_pending,
       (SELECT count(*)::text FROM withdrawals WHERE status = 'processing') AS wd_processing,
       (SELECT count(*)::text FROM withdrawals WHERE status = 'completed') AS wd_completed,
@@ -376,7 +376,7 @@ export async function listAllUpgrades(params: {
   values.push(params.limit, params.offset);
   const rows = await query<Record<string, unknown>>(
     `SELECT up.id, up.created_at, up.success, up.chance_ppm, up.roll_ppm, up.multiplier_bp,
-            up.source_price_nano, up.target_price_nano, up.source_type,
+            up.source_price_minor, up.target_price_minor, up.source_type,
             u.username, ti.name AS target_name
        FROM upgrades up
        JOIN users u ON u.id = up.user_id
@@ -397,8 +397,8 @@ export async function listAllUpgrades(params: {
     chancePercent: Number(row.chance_ppm) / 10_000,
     rollPercent: Number(row.roll_ppm) / 10_000,
     multiplier: Number(row.multiplier_bp) / 10_000,
-    sourcePrice: money(toBigInt(row.source_price_nano)),
-    targetPrice: money(toBigInt(row.target_price_nano)),
+    sourcePrice: money(toBigInt(row.source_price_minor)),
+    targetPrice: money(toBigInt(row.target_price_minor)),
   }));
 
   return { items, total: Number(totalRow?.count ?? '0') };
@@ -424,7 +424,7 @@ export async function listAllDeposits(params: {
 
   values.push(params.limit, params.offset);
   const rows = await query<Record<string, unknown>>(
-    `SELECT d.id, d.payment_id, d.status, d.amount_nano, d.received_nano, d.tx_hash,
+    `SELECT d.id, d.payment_id, d.status, d.amount_nano, d.received_nano, d.credited_minor, d.tx_hash,
             d.created_at, d.confirmed_at, d.expires_at, u.username, u.id AS user_id
        FROM deposits d JOIN users u ON u.id = d.user_id
        ${where}
@@ -437,8 +437,9 @@ export async function listAllDeposits(params: {
     id: row.id,
     paymentId: row.payment_id,
     status: row.status,
-    amount: money(toBigInt(row.amount_nano)),
-    received: money(toBigInt(row.received_nano)),
+    amountTon: tonMoney(toBigInt(row.amount_nano)),
+    receivedTon: tonMoney(toBigInt(row.received_nano)),
+    credited: money(toBigInt(row.credited_minor)),
     txHash: row.tx_hash,
     username: row.username,
     userId: row.user_id,

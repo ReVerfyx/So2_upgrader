@@ -9,7 +9,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../lib/asyncHandler';
 import { parseOrThrow } from '../lib/validate';
-import { tonAmountSchema, uuidSchema } from '../lib/http';
+import { coinAmountSchema, tonAmountSchema, uuidSchema } from '../lib/http';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { env } from '../config/env';
@@ -41,9 +41,9 @@ devRouter.use(rateLimit({ name: 'dev', windowMs: 60_000, max: 60 }));
 devRouter.post(
   '/balance',
   asyncHandler(async (req, res) => {
-    const input = parseOrThrow(z.object({ amount: tonAmountSchema }), req.body);
-    if (input.amount > 10_000n * 1_000_000_000n) {
-      res.status(422).json({ error: { code: 'AMOUNT_TOO_LARGE', message: 'Не более 10 000 TON за раз' } });
+    const input = parseOrThrow(z.object({ amount: coinAmountSchema }), req.body);
+    if (input.amount > 1_000_000n * 100n) {
+      res.status(422).json({ error: { code: 'AMOUNT_TOO_LARGE', message: 'Не более 1 000 000 монет за раз' } });
       return;
     }
 
@@ -51,7 +51,7 @@ devRouter.post(
       await applyBalanceChange(
         {
           userId: req.user!.id,
-          amountNano: input.amount,
+          amountMinor: input.amount,
           type: 'test_credit',
           referenceType: 'dev',
           metadata: { testMode: true },
@@ -62,7 +62,7 @@ devRouter.post(
 
     const balance = await getBalance(req.user!.id);
     logger.warn('Начислен тестовый баланс', { userId: req.user!.id, amount: nanoToTon(input.amount) });
-    res.json({ balance: money(balance.amountNano) });
+    res.json({ balance: money(balance.amountMinor) });
   }),
 );
 
@@ -75,10 +75,10 @@ devRouter.post(
       req.body ?? {},
     );
 
-    const item = await queryOne<{ id: string; price_nano: string; condition: string; name: string }>(
+    const item = await queryOne<{ id: string; price_minor: string; condition: string; name: string }>(
       input.itemId
-        ? 'SELECT id, price_nano, condition, name FROM items WHERE id = $1'
-        : 'SELECT id, price_nano, condition, name FROM items WHERE slug = $1',
+        ? 'SELECT id, price_minor, condition, name FROM items WHERE id = $1'
+        : 'SELECT id, price_minor, condition, name FROM items WHERE slug = $1',
       [input.itemId ?? input.slug ?? STARTER_ITEM_SLUGS[0]],
     );
     if (!item) throw notFound('Предмет не найден', 'ITEM_NOT_FOUND');
@@ -88,7 +88,7 @@ devRouter.post(
         {
           userId: req.user!.id,
           itemId: item.id,
-          priceNano: BigInt(item.price_nano),
+          priceMinor: BigInt(item.price_minor),
           condition: item.condition as never,
           acquiredFrom: 'test',
         },
@@ -107,8 +107,8 @@ devRouter.post(
     const created: string[] = [];
     await withTransaction(async (client) => {
       for (const slug of STARTER_ITEM_SLUGS) {
-        const item = await queryOne<{ id: string; price_nano: string; condition: string }>(
-          'SELECT id, price_nano, condition FROM items WHERE slug = $1',
+        const item = await queryOne<{ id: string; price_minor: string; condition: string }>(
+          'SELECT id, price_minor, condition FROM items WHERE slug = $1',
           [slug],
           client,
         );
@@ -117,7 +117,7 @@ devRouter.post(
           {
             userId: req.user!.id,
             itemId: item.id,
-            priceNano: BigInt(item.price_nano),
+            priceMinor: BigInt(item.price_minor),
             condition: item.condition as never,
             acquiredFrom: 'test',
           },
@@ -139,7 +139,7 @@ devRouter.post(
   '/ton/simulate-payment',
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(
-      z.object({ paymentId: z.string().min(4).max(32), amount: tonAmountSchema.optional() }),
+      z.object({ paymentId: z.string().min(4).max(32), amountTon: tonAmountSchema.optional() }),
       req.body,
     );
 
@@ -162,7 +162,7 @@ devRouter.post(
     if (deposit.user_id !== req.user!.id) throw forbidden('Счёт другого пользователя', 'NOT_DEPOSIT_OWNER');
 
     const tx = provider.pushTransaction({
-      amountNano: input.amount ?? BigInt(deposit.amount_nano),
+      amountNano: input.amountTon ?? BigInt(deposit.amount_nano),
       comment: input.paymentId.toUpperCase(),
       destination: deposit.wallet_address,
     });
@@ -176,6 +176,6 @@ devRouter.post(
 devRouter.get(
   '/catalog',
   asyncHandler(async (_req, res) => {
-    res.json({ items: SEED_ITEMS.map((item) => ({ slug: item.slug, name: item.name, priceTon: item.priceTon })) });
+    res.json({ items: SEED_ITEMS.map((item) => ({ slug: item.slug, name: item.name, priceCoins: item.priceCoins })) });
   }),
 );

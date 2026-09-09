@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../lib/asyncHandler';
 import { parseOrThrow } from '../lib/validate';
-import { paged, paginationSchema, tonAmountSchema, uuidSchema } from '../lib/http';
+import { coinAmountSchema, paged, paginationSchema, tonAmountSchema, uuidSchema } from '../lib/http';
 import { requireAdmin } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { money } from '../lib/money';
@@ -110,7 +110,7 @@ adminRouter.post(
     const id = parseOrThrow(uuidSchema, req.params.id);
     const input = parseOrThrow(
       z.object({
-        amount: tonAmountSchema,
+        amount: coinAmountSchema,
         direction: z.enum(['credit', 'debit']),
         reason: z.string().min(3).max(300),
       }),
@@ -120,7 +120,7 @@ adminRouter.post(
     const signed = input.direction === 'credit' ? input.amount : -input.amount;
     const result = await adjustBalance({
       userId: id,
-      amountNano: signed,
+      amountMinor: signed,
       reason: input.reason,
       adminId: req.user!.id,
     });
@@ -130,7 +130,7 @@ adminRouter.post(
       action: 'balance.adjust',
       targetType: 'user',
       targetId: id,
-      payload: { amountNano: signed.toString(), reason: input.reason, transactionId: result.transactionId },
+      payload: { amountMinor: signed.toString(), reason: input.reason, transactionId: result.transactionId },
       ip: req.ip,
     });
 
@@ -275,7 +275,7 @@ adminRouter.post(
     const input = parseOrThrow(
       z.object({
         txHash: z.string().min(4).max(128),
-        amount: tonAmountSchema.optional(),
+        amountTon: tonAmountSchema.optional(),
         comment: z.string().max(300).optional(),
       }),
       req.body,
@@ -284,7 +284,7 @@ adminRouter.post(
       depositId: id,
       adminId: req.user!.id,
       txHash: input.txHash,
-      amountNano: input.amount,
+      amountNano: input.amountTon,
       comment: input.comment,
     });
     await logAdminAction({
@@ -319,7 +319,7 @@ const itemInputSchema = z.object({
   rarity: z.enum(['common', 'rare', 'epic', 'legendary', 'arcane', 'contraband']),
   condition: z.enum(['factory_new', 'minimal_wear', 'field_tested', 'well_worn', 'battle_scarred']),
   imageUrl: z.string().min(1).max(500),
-  price: tonAmountSchema,
+  price: coinAmountSchema,
   isActive: z.boolean().default(true),
   isWithdrawable: z.boolean().default(true),
   description: z.string().max(500).optional(),
@@ -351,7 +351,7 @@ adminRouter.post(
       rarity: input.rarity,
       condition: input.condition,
       imageUrl: input.imageUrl,
-      priceNano: input.price,
+      priceMinor: input.price,
       isActive: input.isActive,
       isWithdrawable: input.isWithdrawable,
       description: input.description ?? null,
@@ -361,7 +361,7 @@ adminRouter.post(
       action: 'item.create',
       targetType: 'item',
       targetId: item.id,
-      payload: { slug: input.slug, priceNano: input.price.toString() },
+      payload: { slug: input.slug, priceMinor: input.price.toString() },
       ip: req.ip,
     });
     res.status(201).json({ item });
@@ -379,7 +379,7 @@ adminRouter.patch(
       rarity: input.rarity,
       condition: input.condition,
       imageUrl: input.imageUrl,
-      priceNano: input.price,
+      priceMinor: input.price,
       isActive: input.isActive,
       isWithdrawable: input.isWithdrawable,
       description: input.description,
@@ -414,7 +414,7 @@ adminRouter.put(
         minChance: z.number().min(0.0001).max(0.5),
         maxChance: z.number().min(0.05).max(0.95),
         maxMultiplier: z.number().min(1.1).max(1000),
-        minStake: tonAmountSchema,
+        minStake: coinAmountSchema,
       }),
       req.body,
     );
@@ -432,7 +432,7 @@ adminRouter.put(
         minChance: input.minChance,
         maxChance: input.maxChance,
         maxMultiplier: input.maxMultiplier,
-        minStakeNano: input.minStake.toString(),
+        minStakeMinor: input.minStake.toString(),
       },
       req.user!.id,
     );
@@ -453,7 +453,7 @@ adminRouter.put(
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(
       z.object({
-        minDeposit: tonAmountSchema,
+        minDepositTon: tonAmountSchema,
         ttlMinutes: z.number().int().min(5).max(720),
         minConfirmations: z.number().int().min(1).max(30),
       }),
@@ -462,7 +462,7 @@ adminRouter.put(
     await updateSetting(
       'deposit',
       {
-        minDepositNano: input.minDeposit.toString(),
+        minDepositNano: input.minDepositTon.toString(),
         ttlMinutes: input.ttlMinutes,
         minConfirmations: input.minConfirmations,
       },
@@ -473,7 +473,40 @@ adminRouter.put(
       action: 'settings.deposit',
       targetType: 'settings',
       targetId: 'deposit',
-      payload: { ...input, minDeposit: input.minDeposit.toString() },
+      payload: { ...input, minDepositTon: input.minDepositTon.toString() },
+      ip: req.ip,
+    });
+    res.json({ ok: true, settings: await getAllSettings() });
+  }),
+);
+
+/** Курс обмена TON → монеты (1 монета = 1 рубль). */
+adminRouter.put(
+  '/settings/rates',
+  asyncHandler(async (req, res) => {
+    const input = parseOrThrow(
+      z.object({
+        coinsPerTon: z.number().min(1).max(1_000_000),
+        source: z.string().max(32).default('manual'),
+      }),
+      req.body,
+    );
+
+    await updateSetting(
+      'rates',
+      {
+        minorPerTon: String(Math.round(input.coinsPerTon * 100)),
+        source: input.source,
+        updatedAt: new Date().toISOString(),
+      },
+      req.user!.id,
+    );
+    await logAdminAction({
+      adminId: req.user!.id,
+      action: 'settings.rates',
+      targetType: 'settings',
+      targetId: 'rates',
+      payload: { coinsPerTon: input.coinsPerTon },
       ip: req.ip,
     });
     res.json({ ok: true, settings: await getAllSettings() });

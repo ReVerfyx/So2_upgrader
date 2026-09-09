@@ -26,6 +26,19 @@ export function paged<T>(items: T[], total: number, pagination: Pagination): Pag
   };
 }
 
+/** Сумма в монетах из строки запроса → копейки. */
+export const coinAmountSchema = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const raw = typeof value === 'number' ? value.toFixed(2) : value.trim().replace(',', '.');
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Некорректная сумма' });
+      return z.NEVER;
+    }
+    const [whole = '0', fraction = ''] = raw.split('.');
+    return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+  });
+
 /** Сумма в TON из строки запроса → нанотоны. */
 export const tonAmountSchema = z
   .union([z.string(), z.number()])

@@ -99,7 +99,7 @@ describeIfDb('API Upgrader Standoff 2', () => {
     beforeAll(async () => {
       client = new TestClient(app);
       await client.post('/api/auth/register', { username: uniqueUsername('upg'), password: 'supersecret123' });
-      await client.post('/api/dev/balance', { amount: '100' });
+      await client.post('/api/dev/balance', { amount: '5000' });
       await client.post('/api/dev/starter-pack');
 
       const inventory = await client.get('/api/inventory?sort=price_desc&limit=1');
@@ -127,7 +127,7 @@ describeIfDb('API Upgrader Standoff 2', () => {
       expect(quote.chancePpm).toBeGreaterThan(0);
       expect(quote.chancePpm).toBeLessThan(1_000_000);
       expect(quote.multiplier).toBeGreaterThan(1);
-      expect(quote.potentialWin.nano).toBe(quote.target.priceNano);
+      expect(quote.potentialWin.minor).toBe(quote.target.priceMinor);
     });
 
     it('отклоняет игру, если показанный шанс не совпал с серверным', async () => {
@@ -187,7 +187,7 @@ describeIfDb('API Upgrader Standoff 2', () => {
 
     it('повторный запрос с тем же Idempotency-Key не создаёт вторую игру', async () => {
       const key = `idem-${Date.now()}`;
-      const body = { sourceType: 'balance', stake: '1', targetItemId };
+      const body = { sourceType: 'balance', stake: '100', targetItemId };
 
       const first = await client.post('/api/upgrade', body, { 'Idempotency-Key': key });
       const second = await client.post('/api/upgrade', body, { 'Idempotency-Key': key });
@@ -200,7 +200,7 @@ describeIfDb('API Upgrader Standoff 2', () => {
     it('не позволяет играть на сумму больше баланса', async () => {
       const response = await client.post('/api/upgrade', {
         sourceType: 'balance',
-        stake: '100000',
+        stake: '10000000',
         targetItemId,
       });
       expect(response.status).toBeGreaterThanOrEqual(400);
@@ -255,22 +255,27 @@ describeIfDb('API Upgrader Standoff 2', () => {
       // Пытаемся «просто попросить» деньги — счёт создан, но баланс не изменился.
       await client.post('/api/deposit', { amount: '1000' });
       const after = await client.get('/api/balance');
-      expect(after.body.balance.nano).toBe(before.body.balance.nano);
+      expect(after.body.balance.minor).toBe(before.body.balance.minor);
     });
 
     it('зачисляет баланс только после реальной транзакции в блокчейне', async () => {
       const created = await client.post('/api/deposit', { amount: '3' });
-      const paymentId = created.body.deposit.paymentId;
+      const deposit = created.body.deposit;
+      const paymentId = deposit.paymentId;
 
       const before = await client.get('/api/balance');
       await client.post('/api/dev/ton/simulate-payment', { paymentId });
       const after = await client.get('/api/balance');
 
-      expect(BigInt(after.body.balance.nano) - BigInt(before.body.balance.nano)).toBe(3_000_000_000n);
+      // 3 TON конвертируются в монеты по курсу, зафиксированному в счёте
+      const credited = BigInt(after.body.balance.minor) - BigInt(before.body.balance.minor);
+      expect(credited).toBe(BigInt(deposit.expectedCoins.minor));
+      expect(credited).toBeGreaterThan(0n);
 
-      const deposit = await client.get(`/api/deposit/${created.body.deposit.id}`);
-      expect(deposit.body.deposit.status).toBe('confirmed');
-      expect(deposit.body.deposit.txHash).toBeTruthy();
+      const updated = await client.get(`/api/deposit/${deposit.id}`);
+      expect(updated.body.deposit.status).toBe('confirmed');
+      expect(updated.body.deposit.txHash).toBeTruthy();
+      expect(updated.body.deposit.credited.minor).toBe(credited.toString());
     });
 
     it('не зачисляет недоплату', async () => {
@@ -278,10 +283,10 @@ describeIfDb('API Upgrader Standoff 2', () => {
       const paymentId = created.body.deposit.paymentId;
 
       const before = await client.get('/api/balance');
-      await client.post('/api/dev/ton/simulate-payment', { paymentId, amount: '2' });
+      await client.post('/api/dev/ton/simulate-payment', { paymentId, amountTon: '2' });
       const after = await client.get('/api/balance');
 
-      expect(after.body.balance.nano).toBe(before.body.balance.nano);
+      expect(after.body.balance.minor).toBe(before.body.balance.minor);
     });
 
     it('не зачисляет одну транзакцию дважды', async () => {
@@ -292,11 +297,11 @@ describeIfDb('API Upgrader Standoff 2', () => {
       const afterFirst = await client.get('/api/balance');
 
       // Повторный прогон воркера по тем же транзакциям.
-      await client.post('/api/dev/ton/simulate-payment', { paymentId, amount: '4' });
+      await client.post('/api/dev/ton/simulate-payment', { paymentId, amountTon: '4' });
       const afterSecond = await client.get('/api/balance');
 
       // Вторая транзакция относится к уже оплаченному счёту и зачислена не будет.
-      expect(afterSecond.body.balance.nano).toBe(afterFirst.body.balance.nano);
+      expect(afterSecond.body.balance.minor).toBe(afterFirst.body.balance.minor);
     });
   });
 
@@ -382,12 +387,12 @@ describeIfDb('API Upgrader Standoff 2', () => {
 
     it('корректирует баланс вручную и пишет запись в журнал', async () => {
       const response = await admin.post(`/api/admin/users/${userId}/balance`, {
-        amount: '7.5',
+        amount: '750.50',
         direction: 'credit',
         reason: 'Компенсация за сбой',
       });
       expect(response.status).toBe(200);
-      expect(response.body.balance.nano).toBe('7500000000');
+      expect(response.body.balance.minor).toBe('75050');
 
       const logs = await admin.get('/api/admin/logs?limit=5');
       const entry = (logs.body.items as Array<{ action: string }>).find((log) => log.action === 'balance.adjust');
@@ -437,7 +442,7 @@ describeIfDb('API Upgrader Standoff 2', () => {
         minChance: 0.01,
         maxChance: 0.8,
         maxMultiplier: 50,
-        minStake: '0.2',
+        minStake: '20',
       });
       expect(response.status).toBe(200);
 
@@ -450,7 +455,7 @@ describeIfDb('API Upgrader Standoff 2', () => {
         minChance: 0.005,
         maxChance: 0.85,
         maxMultiplier: 100,
-        minStake: '0.1',
+        minStake: '10',
       });
     });
   });

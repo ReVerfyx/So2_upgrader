@@ -38,9 +38,9 @@ userRouter.get(
         contact: user.contact,
         createdAt: user.createdAt,
       },
-      balance: money(balance.amountNano),
-      locked: money(balance.lockedNano),
-      inventory: { count: inventory.total, value: money(inventory.totalValueNano) },
+      balance: money(balance.amountMinor),
+      locked: money(balance.lockedMinor),
+      inventory: { count: inventory.total, value: money(inventory.totalValueMinor) },
       stats,
       fairness,
       csrfToken: req.csrfToken,
@@ -89,7 +89,7 @@ userRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const balance = await getBalance(req.user!.id);
-    res.json({ balance: money(balance.amountNano), locked: money(balance.lockedNano), currency: balance.currency });
+    res.json({ balance: money(balance.amountMinor), locked: money(balance.lockedMinor), currency: balance.currency });
   }),
 );
 
@@ -111,9 +111,9 @@ userRouter.get(
         result.items.map((entry) => ({
           id: entry.id,
           type: entry.type,
-          amount: money(entry.amountNano),
-          balanceBefore: money(entry.balanceBeforeNano),
-          balanceAfter: money(entry.balanceAfterNano),
+          amount: money(entry.amountMinor),
+          balanceBefore: money(entry.balanceBeforeMinor),
+          balanceAfter: money(entry.balanceAfterMinor),
           status: entry.status,
           referenceType: entry.referenceType,
           referenceId: entry.referenceId,

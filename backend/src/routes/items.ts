@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../lib/asyncHandler';
 import { parseOrThrow } from '../lib/validate';
-import { paged, paginationSchema, tonAmountSchema, uuidSchema } from '../lib/http';
+import { paged, paginationSchema, coinAmountSchema, uuidSchema } from '../lib/http';
 import { getItem, listItems, listWeapons } from '../services/itemService';
 
 export const itemsRouter = Router();
@@ -12,8 +12,8 @@ const filtersSchema = paginationSchema.extend({
   search: z.string().max(64).optional(),
   rarity: z.enum(['common', 'rare', 'epic', 'legendary', 'arcane', 'contraband']).optional(),
   weapon: z.string().max(48).optional(),
-  minPrice: tonAmountSchema.optional(),
-  maxPrice: tonAmountSchema.optional(),
+  minPrice: coinAmountSchema.optional(),
+  maxPrice: coinAmountSchema.optional(),
   sort: z.enum(['price_asc', 'price_desc', 'name_asc', 'newest']).optional(),
 });
 

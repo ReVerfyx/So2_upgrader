@@ -22,7 +22,7 @@ interface WithdrawalRow {
   inventory_id: string | null;
   item_id: string;
   item_name: string;
-  price_nano: string;
+  price_minor: string;
   game_nickname: string;
   contact: string | null;
   status: WithdrawalStatus;
@@ -72,7 +72,7 @@ function mapWithdrawal(row: WithdrawalRow, includeUser = false): WithdrawalDto {
     itemName: row.item_name,
     imageUrl: row.image_url ?? null,
     rarity: row.rarity ?? null,
-    price: money(toBigInt(row.price_nano)),
+    price: money(toBigInt(row.price_minor)),
     gameNickname: row.game_nickname,
     contact: row.contact,
     status: row.status,
@@ -116,7 +116,7 @@ export async function createWithdrawal(params: {
     await setInventoryStatus(params.inventoryId, 'locked', client);
 
     const row = await queryOne<WithdrawalRow>(
-      `INSERT INTO withdrawals (user_id, inventory_id, item_id, item_name, price_nano, game_nickname, contact)
+      `INSERT INTO withdrawals (user_id, inventory_id, item_id, item_name, price_minor, game_nickname, contact)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
@@ -124,7 +124,7 @@ export async function createWithdrawal(params: {
         params.inventoryId,
         item.item_id,
         item.name,
-        item.price_nano,
+        item.price_minor,
         nickname,
         contact,
       ],

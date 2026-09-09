@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" role="img" aria-label="Заглушка предмета: обычное">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9aa4b8" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#5c667a" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="fg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9aa4b8"/>
+      <stop offset="100%" stop-color="#5c667a"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="240" rx="18" fill="#0f131c"/>
+  <rect width="320" height="240" rx="18" fill="url(#bg)"/>
+  <g opacity="0.92">
+    <path d="M160 96c26 0 46 22 46 50s-20 50-46 50-46-22-46-50 20-50 46-50z" fill="url(#fg)"/>
+    <rect x="146" y="76" width="28" height="22" rx="6" fill="url(#fg)" opacity=".85"/>
+    <path d="M174 80c18-6 30 4 28 16" stroke="url(#fg)" stroke-width="6" fill="none"/>
+    <path d="M132 128h56M132 146h56" stroke="#0f131c" stroke-opacity=".28" stroke-width="5"/>
+    </g>
+  <text x="160" y="216" font-family="Tektur, Inter, Arial, sans-serif" font-size="13" font-weight="700"
+        fill="#9aa4b8" text-anchor="middle" letter-spacing="2.5">ОБЫЧНОЕ</text>
+</svg>

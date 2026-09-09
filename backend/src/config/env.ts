@@ -107,12 +107,15 @@ export const env = {
   },
 
   economy: {
+    /** Сколько копеек даётся за 1 TON (1 монета = 1 рубль = 100 копеек). */
+    minorPerTon: num('COIN_MINOR_PER_TON', 35_000),
     minDepositTon: num('MIN_DEPOSIT_TON', 0.88),
     depositTtlMinutes: num('DEPOSIT_TTL_MINUTES', 30),
     upgradeHouseEdge: num('UPGRADE_HOUSE_EDGE', 0.08),
     upgradeMinChance: num('UPGRADE_MIN_CHANCE', 0.005),
     upgradeMaxChance: num('UPGRADE_MAX_CHANCE', 0.85),
     upgradeMaxMultiplier: num('UPGRADE_MAX_MULTIPLIER', 100),
+    upgradeMinStakeCoins: num('UPGRADE_MIN_STAKE_COINS', 10),
   },
 } as const;
 

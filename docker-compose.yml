@@ -1,0 +1,90 @@
+# ============================================================================
+#  STOCK2 — Upgrader Standoff 2
+#  Локальный и production-запуск: PostgreSQL + backend + frontend (nginx)
+#
+#  Запуск:  cp .env.example .env && заполнить значения && docker compose up -d
+# ============================================================================
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stock2-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stock2}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:-stock2}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Наружу порт открывается только для локальной отладки.
+      - '${POSTGRES_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-stock2} -d ${POSTGRES_DB:-stock2}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: stock2-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgres://${POSTGRES_USER:-stock2}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-stock2}
+      APP_URL: ${APP_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      SESSION_SECRET: ${SESSION_SECRET:?Задайте SESSION_SECRET в .env}
+      ADMIN_SECRET: ${ADMIN_SECRET:?Задайте ADMIN_SECRET в .env}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      GOOGLE_SUCCESS_REDIRECT: ${GOOGLE_SUCCESS_REDIRECT}
+      TON_WALLET_ADDRESS: ${TON_WALLET_ADDRESS}
+      TON_PROVIDER: ${TON_PROVIDER:-toncenter}
+      TON_API_KEY: ${TON_API_KEY}
+      TON_API_BASE_URL: ${TON_API_BASE_URL}
+      TON_MIN_CONFIRMATIONS: ${TON_MIN_CONFIRMATIONS:-1}
+      TON_POLL_INTERVAL_MS: ${TON_POLL_INTERVAL_MS:-20000}
+      TON_WATCHER_ENABLED: ${TON_WATCHER_ENABLED:-true}
+      MIN_DEPOSIT_TON: ${MIN_DEPOSIT_TON:-0.88}
+      DEPOSIT_TTL_MINUTES: ${DEPOSIT_TTL_MINUTES:-30}
+      UPGRADE_HOUSE_EDGE: ${UPGRADE_HOUSE_EDGE:-0.08}
+      # В production тестовый режим принудительно отключён кодом.
+      TEST_MODE: 'false'
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    ports:
+      - '${BACKEND_PORT:-4000}:4000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "require('http').get('http://127.0.0.1:4000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_BRAND_NAME: ${VITE_BRAND_NAME:-STOCK2}
+        VITE_BRAND_TAGLINE: ${VITE_BRAND_TAGLINE:-UPGRADER STANDOFF 2}
+        VITE_TELEGRAM_URL: ${VITE_TELEGRAM_URL:-https://t.me/stock2_shop}
+    container_name: stock2-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '${FRONTEND_PORT:-8080}:80'
+
+volumes:
+  postgres_data:

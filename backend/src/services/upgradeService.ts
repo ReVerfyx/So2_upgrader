@@ -38,7 +38,7 @@ export interface UpgradeRequest {
   /** Для sourceType = 'item'. */
   sourceInventoryId?: string;
   /** Для sourceType = 'balance', в нанотонах. */
-  stakeNano?: bigint;
+  stakeMinor?: bigint;
   targetItemId: string;
   /** Шанс, показанный пользователю на экране (миллионные доли). */
   expectedChancePpm?: number;
@@ -48,7 +48,7 @@ export interface UpgradeQuoteDto {
   sourceType: UpgradeSourceType;
   sourceName: string;
   sourcePrice: MoneyDto;
-  sourcePriceNano: string;
+  sourcePriceMinor: string;
   target: ItemDto;
   chancePpm: number;
   chancePercent: number;
@@ -91,12 +91,12 @@ interface UserSeedRow {
 }
 
 /** Проверка и нормализация ставки балансом. */
-function assertStake(stakeNano: bigint | undefined, minStakeNano: bigint): bigint {
-  if (stakeNano === undefined) throw badRequest('Не указана сумма ставки', 'STAKE_REQUIRED');
-  if (stakeNano < minStakeNano) {
-    throw badRequest(`Минимальная ставка — ${money(minStakeNano).formatted} TON`, 'STAKE_TOO_SMALL');
+function assertStake(stakeMinor: bigint | undefined, minStakeMinor: bigint): bigint {
+  if (stakeMinor === undefined) throw badRequest('Не указана сумма ставки', 'STAKE_REQUIRED');
+  if (stakeMinor < minStakeMinor) {
+    throw badRequest(`Минимальная ставка — ${money(minStakeMinor).formatted} монет`, 'STAKE_TOO_SMALL');
   }
-  return stakeNano;
+  return stakeMinor;
 }
 
 /**
@@ -106,24 +106,24 @@ function assertStake(stakeNano: bigint | undefined, minStakeNano: bigint): bigin
 export async function previewUpgrade(request: Omit<UpgradeRequest, 'expectedChancePpm'>): Promise<UpgradeQuoteDto> {
   const settings = await getUpgradeSettings();
 
-  let sourcePriceNano: bigint;
+  let sourcePriceMinor: bigint;
   let sourceName: string;
 
   if (request.sourceType === 'item') {
     if (!request.sourceInventoryId) throw badRequest('Не выбран предмет для апгрейда', 'SOURCE_ITEM_REQUIRED');
-    const row = await queryOne<{ user_id: string; status: string; name: string; price_nano: string }>(
-      `SELECT inv.user_id, inv.status, i.name, i.price_nano
+    const row = await queryOne<{ user_id: string; status: string; name: string; price_minor: string }>(
+      `SELECT inv.user_id, inv.status, i.name, i.price_minor
          FROM inventory inv JOIN items i ON i.id = inv.item_id
         WHERE inv.id = $1`,
       [request.sourceInventoryId],
     );
     if (!row || row.user_id !== request.userId) throw notFound('Предмет инвентаря не найден', 'INVENTORY_ITEM_NOT_FOUND');
     if (row.status !== 'available') throw conflict('Предмет недоступен для апгрейда', 'ITEM_NOT_AVAILABLE');
-    sourcePriceNano = toBigInt(row.price_nano);
+    sourcePriceMinor = toBigInt(row.price_minor);
     sourceName = row.name;
   } else {
-    sourcePriceNano = assertStake(request.stakeNano, settings.minStakeNano);
-    sourceName = `Ставка ${money(sourcePriceNano).formatted} TON`;
+    sourcePriceMinor = assertStake(request.stakeMinor, settings.minStakeMinor);
+    sourceName = `Ставка ${money(sourcePriceMinor).formatted} монет`;
   }
 
   const targetRow = await queryOne<ItemRow>('SELECT * FROM items WHERE id = $1 AND is_active = TRUE', [
@@ -131,22 +131,22 @@ export async function previewUpgrade(request: Omit<UpgradeRequest, 'expectedChan
   ]);
   if (!targetRow) throw notFound('Желаемый предмет не найден', 'TARGET_ITEM_NOT_FOUND');
 
-  const targetPriceNano = toBigInt(targetRow.price_nano);
+  const targetPriceMinor = toBigInt(targetRow.price_minor);
 
   try {
-    const quote = calculateUpgrade(sourcePriceNano, targetPriceNano, settings);
+    const quote = calculateUpgrade(sourcePriceMinor, targetPriceMinor, settings);
     return {
       sourceType: request.sourceType,
       sourceName,
-      sourcePrice: money(sourcePriceNano),
-      sourcePriceNano: sourcePriceNano.toString(),
+      sourcePrice: money(sourcePriceMinor),
+      sourcePriceMinor: sourcePriceMinor.toString(),
       target: mapItem(targetRow),
       chancePpm: quote.chancePpm,
       chancePercent: quote.chancePercent,
       multiplier: quote.multiplier,
       multiplierBp: quote.multiplierBp,
       profit: money(quote.profitNano),
-      potentialWin: money(targetPriceNano),
+      potentialWin: money(targetPriceMinor),
     };
   } catch (error) {
     if (error instanceof UpgradeMathError) throw badRequest(error.message, error.code);
@@ -156,16 +156,16 @@ export async function previewUpgrade(request: Omit<UpgradeRequest, 'expectedChan
 
 /** Список предметов, доступных как цель для указанной ставки. */
 export async function listTargets(params: {
-  sourcePriceNano: bigint;
+  sourcePriceMinor: bigint;
   search?: string;
   limit: number;
   offset: number;
 }): Promise<{ items: Array<ItemDto & { chancePercent: number; multiplier: number }>; total: number }> {
   const settings = await getUpgradeSettings();
-  const range = targetPriceRange(params.sourcePriceNano, settings);
+  const range = targetPriceRange(params.sourcePriceMinor, settings);
 
   const values: unknown[] = [range.minNano.toString(), range.maxNano.toString()];
-  let where = 'WHERE is_active = TRUE AND price_nano >= $1 AND price_nano <= $2';
+  let where = 'WHERE is_active = TRUE AND price_minor >= $1 AND price_minor <= $2';
   if (params.search) {
     values.push(`%${params.search.toLowerCase()}%`);
     where += ` AND lower(name) LIKE $${values.length}`;
@@ -175,12 +175,12 @@ export async function listTargets(params: {
 
   values.push(params.limit, params.offset);
   const rows = await query<ItemRow>(
-    `SELECT * FROM items ${where} ORDER BY price_nano ASC LIMIT $${values.length - 1} OFFSET $${values.length}`,
+    `SELECT * FROM items ${where} ORDER BY price_minor ASC LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values,
   );
 
   const items = rows.map((row) => {
-    const quote = calculateUpgrade(params.sourcePriceNano, toBigInt(row.price_nano), settings);
+    const quote = calculateUpgrade(params.sourcePriceMinor, toBigInt(row.price_minor), settings);
     return { ...mapItem(row), chancePercent: quote.chancePercent, multiplier: quote.multiplier };
   });
 
@@ -205,7 +205,7 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
     if (!seedRow) throw notFound('Пользователь не найден', 'USER_NOT_FOUND');
 
     // 2. Определяем ставку. Цена берётся ТОЛЬКО из базы, не из запроса.
-    let sourcePriceNano: bigint;
+    let sourcePriceMinor: bigint;
     let sourceName: string;
     let sourceItemId: string | null = null;
     let sourceInventoryId: string | null = null;
@@ -213,15 +213,15 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
     if (request.sourceType === 'item') {
       if (!request.sourceInventoryId) throw badRequest('Не выбран предмет для апгрейда', 'SOURCE_ITEM_REQUIRED');
       const inventoryRow = await lockInventoryItem(request.userId, request.sourceInventoryId, client);
-      sourcePriceNano = toBigInt(inventoryRow.item_price_nano);
+      sourcePriceMinor = toBigInt(inventoryRow.item_price_minor);
       sourceName = inventoryRow.name;
       sourceItemId = inventoryRow.item_id;
       sourceInventoryId = inventoryRow.id;
     } else {
-      sourcePriceNano = assertStake(request.stakeNano, settings.minStakeNano);
-      sourceName = `Ставка ${money(sourcePriceNano).formatted} TON`;
+      sourcePriceMinor = assertStake(request.stakeMinor, settings.minStakeMinor);
+      sourceName = `Ставка ${money(sourcePriceMinor).formatted} монет`;
       const balance = await lockBalance(request.userId, client);
-      if (balance.amountNano < sourcePriceNano) {
+      if (balance.amountMinor < sourcePriceMinor) {
         throw conflict('Недостаточно средств на балансе', 'INSUFFICIENT_FUNDS');
       }
     }
@@ -233,11 +233,11 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
       client,
     );
     if (!targetRow) throw notFound('Желаемый предмет не найден', 'TARGET_ITEM_NOT_FOUND');
-    const targetPriceNano = toBigInt(targetRow.price_nano);
+    const targetPriceMinor = toBigInt(targetRow.price_minor);
 
     let quote;
     try {
-      quote = calculateUpgrade(sourcePriceNano, targetPriceNano, settings);
+      quote = calculateUpgrade(sourcePriceMinor, targetPriceMinor, settings);
     } catch (error) {
       if (error instanceof UpgradeMathError) throw badRequest(error.message, error.code);
       throw error;
@@ -256,7 +256,7 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
       await applyBalanceChange(
         {
           userId: request.userId,
-          amountNano: -sourcePriceNano,
+          amountMinor: -sourcePriceMinor,
           type: 'upgrade_stake',
           referenceType: 'upgrade',
           metadata: { targetItemId: targetRow.id, chancePpm: quote.chancePpm },
@@ -281,7 +281,7 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
         {
           userId: request.userId,
           itemId: targetRow.id,
-          priceNano: targetPriceNano,
+          priceMinor: targetPriceMinor,
           condition: targetRow.condition,
           acquiredFrom: 'upgrade',
         },
@@ -291,8 +291,8 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
 
     // 8. Фиксация игры.
     const upgradeRow = await queryOne<{ id: string; created_at: Date }>(
-      `INSERT INTO upgrades (user_id, source_type, source_inventory_id, source_item_id, source_price_nano,
-                             target_item_id, target_price_nano, multiplier_bp, chance_ppm, roll_ppm,
+      `INSERT INTO upgrades (user_id, source_type, source_inventory_id, source_item_id, source_price_minor,
+                             target_item_id, target_price_minor, multiplier_bp, chance_ppm, roll_ppm,
                              success, result_inventory_id, server_seed, server_seed_hash, client_seed, nonce)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING id, created_at`,
@@ -301,9 +301,9 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
         request.sourceType,
         sourceInventoryId,
         sourceItemId,
-        sourcePriceNano.toString(),
+        sourcePriceMinor.toString(),
         targetRow.id,
-        targetPriceNano.toString(),
+        targetPriceMinor.toString(),
         quote.multiplierBp,
         quote.chancePpm,
         roll,
@@ -333,9 +333,9 @@ export async function performUpgrade(request: UpgradeRequest): Promise<UpgradeRe
       multiplier: quote.multiplier,
       target: mapItem(targetRow),
       sourceName,
-      sourcePrice: money(sourcePriceNano),
+      sourcePrice: money(sourcePriceMinor),
       wonInventoryId,
-      balanceAfter: money(balance.amountNano),
+      balanceAfter: money(balance.amountMinor),
       fairness: {
         serverSeedHash: seedRow.server_seed_hash,
         clientSeed: seedRow.client_seed,
@@ -351,8 +351,8 @@ interface UpgradeHistoryRow {
   id: string;
   user_id: string;
   source_type: UpgradeSourceType;
-  source_price_nano: string;
-  target_price_nano: string;
+  source_price_minor: string;
+  target_price_minor: string;
   multiplier_bp: number;
   chance_ppm: number;
   roll_ppm: number;
@@ -408,12 +408,12 @@ function mapHistory(row: UpgradeHistoryRow, includeUser: boolean): UpgradeHistor
   return {
     id: row.id,
     sourceType: row.source_type,
-    sourceName: row.source_name ?? `Ставка ${money(toBigInt(row.source_price_nano)).formatted} TON`,
-    sourcePrice: money(toBigInt(row.source_price_nano)),
+    sourceName: row.source_name ?? `Ставка ${money(toBigInt(row.source_price_minor)).formatted} монет`,
+    sourcePrice: money(toBigInt(row.source_price_minor)),
     targetName: row.target_name,
     targetImage: row.target_image,
     targetRarity: row.target_rarity,
-    targetPrice: money(toBigInt(row.target_price_nano)),
+    targetPrice: money(toBigInt(row.target_price_minor)),
     chancePercent: row.chance_ppm / 10_000,
     rollPercent: row.roll_ppm / 10_000,
     multiplier: row.multiplier_bp / 10_000,
@@ -480,8 +480,8 @@ export async function getUserUpgradeStats(userId: string): Promise<{
   }>(
     `SELECT count(*)::text AS total,
             count(*) FILTER (WHERE success)::text AS wins,
-            sum(source_price_nano)::text AS wagered,
-            max(target_price_nano) FILTER (WHERE success)::text AS best
+            sum(source_price_minor)::text AS wagered,
+            max(target_price_minor) FILTER (WHERE success)::text AS best
        FROM upgrades WHERE user_id = $1`,
     [userId],
   );

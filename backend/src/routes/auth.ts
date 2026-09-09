@@ -78,7 +78,7 @@ authRouter.post(
     const session = await createSession(user.id, { userAgent: req.get('user-agent'), ip: req.ip });
     setSessionCookie(res, session.token, session.csrfToken, session.expiresAt);
     const balance = await getBalance(user.id);
-    res.json({ user: userResponse(user), balance: money(balance.amountNano), csrfToken: session.csrfToken });
+    res.json({ user: userResponse(user), balance: money(balance.amountMinor), csrfToken: session.csrfToken });
   }),
 );
 

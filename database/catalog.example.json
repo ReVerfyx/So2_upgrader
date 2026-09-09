@@ -1,0 +1,34 @@
+{
+  "$comment": "Пример файла каталога предметов. Цены указываются в монетах (1 монета = 1 рубль). Загрузка: npm run items:import --workspace backend -- ./database/catalog.example.json",
+  "items": [
+    {
+      "slug": "karambit-fade",
+      "name": "Керамбит | Градиент",
+      "weapon": "Нож",
+      "rarity": "arcane",
+      "condition": "factory_new",
+      "priceCoins": "74000",
+      "imageUrl": "https://cdn.example.com/so2/karambit-fade.png",
+      "description": "Керамбит с градиентной полировкой клинка",
+      "isActive": true,
+      "isWithdrawable": true
+    },
+    {
+      "slug": "akr-dragon",
+      "name": "AKR | Дракон",
+      "weapon": "AKR",
+      "rarity": "legendary",
+      "condition": "factory_new",
+      "priceCoins": "9500",
+      "imageUrl": "https://cdn.example.com/so2/akr-dragon.png"
+    },
+    {
+      "slug": "usp-carbon",
+      "name": "USP | Карбон",
+      "weapon": "USP",
+      "rarity": "common",
+      "condition": "minimal_wear",
+      "priceCoins": "60"
+    }
+  ]
+}

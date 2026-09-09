@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../lib/asyncHandler';
 import { parseOrThrow } from '../lib/validate';
-import { paged, paginationSchema, tonAmountSchema, uuidSchema } from '../lib/http';
+import { paged, paginationSchema, coinAmountSchema, uuidSchema } from '../lib/http';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { idempotency } from '../middleware/idempotency';
@@ -34,7 +34,7 @@ const sourceSchema = z
   .object({
     sourceType: z.enum(['item', 'balance']),
     sourceInventoryId: uuidSchema.optional(),
-    stake: tonAmountSchema.optional(),
+    stake: coinAmountSchema.optional(),
     targetItemId: uuidSchema,
     expectedChancePpm: z.coerce.number().int().min(1).max(999_999).optional(),
   })
@@ -52,7 +52,7 @@ upgradeRouter.post(
       userId: req.user!.id,
       sourceType: input.sourceType,
       sourceInventoryId: input.sourceInventoryId,
-      stakeNano: input.stake,
+      stakeMinor: input.stake,
       targetItemId: input.targetItemId,
     });
     res.json({ quote });
@@ -70,7 +70,7 @@ upgradeRouter.post(
       userId: req.user!.id,
       sourceType: input.sourceType,
       sourceInventoryId: input.sourceInventoryId,
-      stakeNano: input.stake,
+      stakeMinor: input.stake,
       targetItemId: input.targetItemId,
       expectedChancePpm: input.expectedChancePpm,
     });
@@ -86,36 +86,36 @@ upgradeRouter.get(
     const input = parseOrThrow(
       paginationSchema.extend({
         sourceInventoryId: uuidSchema.optional(),
-        stake: tonAmountSchema.optional(),
+        stake: coinAmountSchema.optional(),
         search: z.string().max(64).optional(),
       }),
       req.query,
     );
 
-    let sourcePriceNano: bigint;
+    let sourcePriceMinor: bigint;
     if (input.sourceInventoryId) {
-      const row = await queryOne<{ user_id: string; price_nano: string }>(
-        `SELECT inv.user_id, i.price_nano
+      const row = await queryOne<{ user_id: string; price_minor: string }>(
+        `SELECT inv.user_id, i.price_minor
            FROM inventory inv JOIN items i ON i.id = inv.item_id
           WHERE inv.id = $1 AND inv.status = 'available'`,
         [input.sourceInventoryId],
       );
       if (!row || row.user_id !== req.user!.id) throw notFound('Предмет не найден', 'INVENTORY_ITEM_NOT_FOUND');
-      sourcePriceNano = toBigInt(row.price_nano);
+      sourcePriceMinor = toBigInt(row.price_minor);
     } else if (input.stake !== undefined) {
-      sourcePriceNano = input.stake;
+      sourcePriceMinor = input.stake;
     } else {
       throw badRequest('Укажите sourceInventoryId или stake', 'SOURCE_REQUIRED');
     }
 
     const result = await listTargets({
-      sourcePriceNano,
+      sourcePriceMinor,
       search: input.search,
       limit: input.limit,
       offset: input.offset,
     });
 
-    res.json({ ...paged(result.items, result.total, input), sourcePrice: money(sourcePriceNano) });
+    res.json({ ...paged(result.items, result.total, input), sourcePrice: money(sourcePriceMinor) });
   }),
 );
 
@@ -151,7 +151,7 @@ upgradeRouter.get(
       minChancePercent: Math.round(settings.minChance * 10000) / 100,
       maxChancePercent: Math.round(settings.maxChance * 10000) / 100,
       maxMultiplier: settings.maxMultiplier,
-      minStake: money(settings.minStakeNano),
+      minStake: money(settings.minStakeMinor),
     });
   }),
 );

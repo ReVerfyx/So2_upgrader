@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Базовые стили. Тёмная тема, отсутствие горизонтального скролла,
+   безопасные отступы под «чёлки» и жесты на мобильных устройствах.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body {
+    @apply bg-night text-white;
+    /* Никакого горизонтального скролла ни на одном экране */
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+  }
+
+  /* Тонкий скроллбар как в референсе */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 0.3rem;
+    height: 0.3rem;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0.3rem;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 0.3rem;
+  }
+
+  /* Убираем стрелки у числовых полей */
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    touch-action: manipulation;
+  }
+
+  ::selection {
+    background: rgba(251, 213, 6, 0.3);
+  }
+}
+
+/* ==========================================================================
+   Компоненты интерфейса
+   ========================================================================== */
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-[1440px] px-3 sm:px-4 lg:px-6;
+  }
+
+  .panel {
+    @apply rounded-xl border border-white/[0.06] bg-block;
+  }
+
+  .panel-card {
+    @apply rounded-lg border border-white/[0.06] bg-card;
+  }
+
+  /* Кнопки */
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold
+           transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+    /* Крупная зона нажатия для мобильных (минимум 44px) */
+    min-height: 2.75rem;
+  }
+
+  .btn-primary {
+    @apply btn bg-gradient-accent text-black hover:brightness-110 active:scale-[0.98]
+           disabled:hover:brightness-100;
+  }
+
+  .btn-secondary {
+    @apply btn border border-white/10 bg-dark text-white hover:border-white/20 hover:bg-card active:scale-[0.98];
+  }
+
+  .btn-ghost {
+    @apply btn text-muted hover:bg-white/5 hover:text-white;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger text-white hover:brightness-110 active:scale-[0.98];
+  }
+
+  .btn-sm {
+    @apply px-3 text-13;
+    min-height: 2.25rem;
+  }
+
+  /* Поля ввода */
+  .input {
+    @apply w-full rounded-lg border border-white/10 bg-dark px-3 text-sm text-white
+           placeholder:text-muted/60 focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/30;
+    min-height: 2.75rem;
+  }
+
+  .label {
+    @apply mb-1.5 block text-13 font-medium text-muted;
+  }
+
+  /* Значки статусов */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-xxs font-semibold uppercase tracking-wide;
+  }
+
+  /* Ползунок в стиле референса */
+  .range-accent {
+    @apply h-1 w-full cursor-pointer appearance-none rounded-full bg-dark outline-none;
+    background-image: linear-gradient(90deg, #fbd506 0%, #ffdd23 50%, #fbd506 100%);
+    background-repeat: no-repeat;
+  }
+
+  .range-accent::-webkit-slider-thumb {
+    @apply h-4 w-4 cursor-pointer appearance-none rounded-full border border-[#ffeac0]/60;
+    background: linear-gradient(93deg, #fbd506 1.16%, #ffdd23, #fbd506);
+  }
+
+  .range-accent::-moz-range-thumb {
+    @apply h-4 w-4 cursor-pointer rounded-full border border-[#ffeac0]/60;
+    background: linear-gradient(93deg, #fbd506 1.16%, #ffdd23, #fbd506);
+  }
+
+  /* Skeleton-загрузка с «бегущим бликом» */
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-white/[0.04];
+  }
+
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 animate-shimmer;
+    background-image: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.07) 50%, transparent 100%);
+    background-size: 200% 200%;
+  }
+
+  .text-gradient-accent {
+    @apply bg-gradient-accent bg-clip-text text-transparent;
+  }
+
+  /* Безопасная зона под нижнюю навигацию на мобильных */
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Плавное появление списков */
+  .stagger > * {
+    animation: fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+  }
+}
+
+/* Уважение к системной настройке «уменьшить движение» */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

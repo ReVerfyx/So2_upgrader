@@ -11,10 +11,20 @@ import type { UpgradeSettings } from '../lib/upgradeMath';
 
 /** Настройки апгрейда вместе с минимальной ставкой балансом. */
 export interface UpgradeSettingsFull extends UpgradeSettings {
-  minStakeNano: bigint;
+  /** Минимальная ставка балансом, копейки. */
+  minStakeMinor: bigint;
+}
+
+/** Курс обмена TON → монеты. */
+export interface RateSettings {
+  /** Сколько копеек за 1 TON (35000 = 350 монет). */
+  minorPerTon: bigint;
+  source: string;
+  updatedAt: string | null;
 }
 
 export interface DepositSettings {
+  /** Минимальная сумма пополнения в нанотонах. */
   minDepositNano: bigint;
   ttlMinutes: number;
   minConfirmations: number;
@@ -48,7 +58,7 @@ export async function getUpgradeSettings(db: Db = pool): Promise<UpgradeSettings
     minChance: env.economy.upgradeMinChance,
     maxChance: env.economy.upgradeMaxChance,
     maxMultiplier: env.economy.upgradeMaxMultiplier,
-    minStakeNano: '100000000',
+    minStakeMinor: '1000',
   };
   const stored = await readSetting<Partial<Record<keyof typeof fallback, number | string>>>('upgrade', fallback, db);
   return {
@@ -56,7 +66,7 @@ export async function getUpgradeSettings(db: Db = pool): Promise<UpgradeSettings
     minChance: Number(stored.minChance ?? fallback.minChance),
     maxChance: Number(stored.maxChance ?? fallback.maxChance),
     maxMultiplier: Number(stored.maxMultiplier ?? fallback.maxMultiplier),
-    minStakeNano: BigInt(stored.minStakeNano ?? fallback.minStakeNano),
+    minStakeMinor: BigInt(stored.minStakeMinor ?? fallback.minStakeMinor),
   };
 }
 
@@ -96,4 +106,20 @@ export async function updateSetting(key: string, value: unknown, adminId: string
 export async function getAllSettings(db: Db = pool): Promise<Record<string, unknown>> {
   const rows = await query<{ key: string; value: unknown }>('SELECT key, value FROM app_settings ORDER BY key', [], db);
   return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+}
+
+
+/** Курс обмена TON → монеты (по умолчанию берётся из переменных окружения). */
+export async function getRateSettings(db: Db = pool): Promise<RateSettings> {
+  const fallback = { minorPerTon: String(env.economy.minorPerTon), source: 'env', updatedAt: null };
+  const stored = await readSetting<{ minorPerTon?: string | number; source?: string; updatedAt?: string | null }>(
+    'rates',
+    fallback,
+    db,
+  );
+  return {
+    minorPerTon: BigInt(stored.minorPerTon ?? fallback.minorPerTon),
+    source: stored.source ?? 'manual',
+    updatedAt: stored.updatedAt ?? null,
+  };
 }

@@ -8,8 +8,8 @@ import { rateLimit } from '../middleware/rateLimit';
 import { idempotency } from '../middleware/idempotency';
 import { z } from 'zod';
 import { createDeposit, getDeposit, getWalletAddress, listDeposits } from '../services/depositService';
-import { getDepositSettings } from '../services/settingsService';
-import { money } from '../lib/money';
+import { getDepositSettings, getRateSettings } from '../services/settingsService';
+import { money, nanoToMinor, tonMoney } from '../lib/money';
 import { env } from '../config/env';
 
 export const depositRouter = Router();
@@ -17,12 +17,16 @@ export const depositRouter = Router();
 depositRouter.get(
   '/deposit/info',
   asyncHandler(async (_req, res) => {
-    const settings = await getDepositSettings();
+    const [settings, rates] = await Promise.all([getDepositSettings(), getRateSettings()]);
     res.json({
-      minDeposit: money(settings.minDepositNano),
+      minDeposit: tonMoney(settings.minDepositNano),
+      minDepositCoins: money(nanoToMinor(settings.minDepositNano, rates.minorPerTon)),
+      coinsPerTon: (rates.minorPerTon / 100n).toString(),
+      rateSource: rates.source,
       ttlMinutes: settings.ttlMinutes,
       minConfirmations: settings.minConfirmations,
-      currency: 'TON',
+      payCurrency: 'TON',
+      balanceCurrency: 'COIN',
       configured: Boolean(env.ton.walletAddress),
       // Адрес отдаём только вместе со счётом, но для страницы «как пополнить»
       // достаточно факта настройки кошелька.

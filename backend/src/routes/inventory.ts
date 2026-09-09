@@ -34,7 +34,7 @@ inventoryRouter.get(
 
     res.json({
       ...paged(result.items, result.total, input),
-      totalValue: money(result.totalValueNano),
+      totalValue: money(result.totalValueMinor),
     });
   }),
 );
@@ -56,6 +56,6 @@ inventoryRouter.post(
     const id = parseOrThrow(uuidSchema, req.params.id);
     const result = await sellInventoryItem(req.user!.id, id);
     const balance = await getBalance(req.user!.id);
-    res.json({ sold: money(result.amountNano), balance: money(balance.amountNano) });
+    res.json({ sold: money(result.amountMinor), balance: money(balance.amountMinor) });
   }),
 );

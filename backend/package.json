@@ -14,7 +14,9 @@
     "seed:prod": "node dist/db/seed.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "items:import": "tsx src/db/importCatalog.ts",
+    "items:import:prod": "node dist/db/importCatalog.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

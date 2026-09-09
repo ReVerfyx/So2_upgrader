@@ -15,7 +15,7 @@ export interface ItemRow {
   rarity: Rarity;
   condition: Condition;
   image_url: string;
-  price_nano: string;
+  price_minor: string;
   is_active: boolean;
   is_withdrawable: boolean;
   description: string | null;
@@ -32,7 +32,7 @@ export interface ItemDto {
   condition: Condition;
   imageUrl: string;
   price: MoneyDto;
-  priceNano: string;
+  priceMinor: string;
   isActive: boolean;
   isWithdrawable: boolean;
   description: string | null;
@@ -47,8 +47,8 @@ export function mapItem(row: ItemRow): ItemDto {
     rarity: row.rarity,
     condition: row.condition,
     imageUrl: row.image_url,
-    price: money(toBigInt(row.price_nano)),
-    priceNano: row.price_nano,
+    price: money(toBigInt(row.price_minor)),
+    priceMinor: row.price_minor,
     isActive: row.is_active,
     isWithdrawable: row.is_withdrawable,
     description: row.description,
@@ -86,22 +86,22 @@ export async function listItems(params: ListItemsParams, db: Db = pool): Promise
   }
   if (params.minPriceNano !== undefined) {
     values.push(params.minPriceNano.toString());
-    filters.push(`price_nano >= $${values.length}`);
+    filters.push(`price_minor >= $${values.length}`);
   }
   if (params.maxPriceNano !== undefined) {
     values.push(params.maxPriceNano.toString());
-    filters.push(`price_nano <= $${values.length}`);
+    filters.push(`price_minor <= $${values.length}`);
   }
 
   const where = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
   const order =
     params.sort === 'price_desc'
-      ? 'price_nano DESC'
+      ? 'price_minor DESC'
       : params.sort === 'name_asc'
         ? 'name ASC'
         : params.sort === 'newest'
           ? 'created_at DESC'
-          : 'price_nano ASC';
+          : 'price_minor ASC';
 
   const totalRow = await queryOne<{ count: string }>(`SELECT count(*)::text AS count FROM items ${where}`, values, db);
 
@@ -142,7 +142,7 @@ export interface UpsertItemInput {
   rarity: Rarity;
   condition: Condition;
   imageUrl: string;
-  priceNano: bigint;
+  priceMinor: bigint;
   isActive: boolean;
   isWithdrawable: boolean;
   description?: string | null;
@@ -150,7 +150,7 @@ export interface UpsertItemInput {
 
 export async function createItem(input: UpsertItemInput, db: Db = pool): Promise<ItemDto> {
   const row = await queryOne<ItemRow>(
-    `INSERT INTO items (slug, name, weapon, rarity, condition, image_url, price_nano, is_active, is_withdrawable, description)
+    `INSERT INTO items (slug, name, weapon, rarity, condition, image_url, price_minor, is_active, is_withdrawable, description)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
@@ -160,7 +160,7 @@ export async function createItem(input: UpsertItemInput, db: Db = pool): Promise
       input.rarity,
       input.condition,
       input.imageUrl,
-      input.priceNano.toString(),
+      input.priceMinor.toString(),
       input.isActive,
       input.isWithdrawable,
       input.description ?? null,
@@ -178,7 +178,7 @@ export async function updateItem(id: string, patch: Partial<UpsertItemInput>, db
         rarity          = COALESCE($4, rarity),
         condition       = COALESCE($5, condition),
         image_url       = COALESCE($6, image_url),
-        price_nano      = COALESCE($7, price_nano),
+        price_minor      = COALESCE($7, price_minor),
         is_active       = COALESCE($8, is_active),
         is_withdrawable = COALESCE($9, is_withdrawable),
         description     = COALESCE($10, description)
@@ -191,7 +191,7 @@ export async function updateItem(id: string, patch: Partial<UpsertItemInput>, db
       patch.rarity ?? null,
       patch.condition ?? null,
       patch.imageUrl ?? null,
-      patch.priceNano?.toString() ?? null,
+      patch.priceMinor?.toString() ?? null,
       patch.isActive ?? null,
       patch.isWithdrawable ?? null,
       patch.description ?? null,

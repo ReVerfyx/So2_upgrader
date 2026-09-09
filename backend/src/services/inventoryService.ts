@@ -19,7 +19,7 @@ interface InventoryRow {
   item_id: string;
   status: InventoryStatus;
   condition: Condition;
-  price_nano: string;
+  price_minor: string;
   acquired_from: string;
   source_id: string | null;
   created_at: Date;
@@ -28,7 +28,7 @@ interface InventoryRow {
   weapon: string;
   rarity: Rarity;
   image_url: string;
-  item_price_nano: string;
+  item_price_minor: string;
   is_withdrawable: boolean;
 }
 
@@ -43,7 +43,7 @@ export interface InventoryItemDto {
   imageUrl: string;
   status: InventoryStatus;
   price: MoneyDto;
-  priceNano: string;
+  priceMinor: string;
   currentPrice: MoneyDto;
   acquiredFrom: string;
   isWithdrawable: boolean;
@@ -52,7 +52,7 @@ export interface InventoryItemDto {
 
 const SELECT_INVENTORY = `
   SELECT inv.*, i.name, i.slug, i.weapon, i.rarity, i.image_url,
-         i.price_nano AS item_price_nano, i.is_withdrawable
+         i.price_minor AS item_price_minor, i.is_withdrawable
     FROM inventory inv
     JOIN items i ON i.id = inv.item_id
 `;
@@ -68,9 +68,9 @@ export function mapInventoryItem(row: InventoryRow): InventoryItemDto {
     condition: row.condition,
     imageUrl: row.image_url,
     status: row.status,
-    price: money(toBigInt(row.price_nano)),
-    priceNano: row.price_nano,
-    currentPrice: money(toBigInt(row.item_price_nano)),
+    price: money(toBigInt(row.price_minor)),
+    priceMinor: row.price_minor,
+    currentPrice: money(toBigInt(row.item_price_minor)),
     acquiredFrom: row.acquired_from,
     isWithdrawable: row.is_withdrawable,
     createdAt: row.created_at,
@@ -83,7 +83,7 @@ export async function listInventory(params: {
   limit: number;
   offset: number;
   sort?: 'price_asc' | 'price_desc' | 'newest';
-}): Promise<{ items: InventoryItemDto[]; total: number; totalValueNano: bigint }> {
+}): Promise<{ items: InventoryItemDto[]; total: number; totalValueMinor: bigint }> {
   const values: unknown[] = [params.userId];
   const filters = ['inv.user_id = $1'];
 
@@ -98,10 +98,10 @@ export async function listInventory(params: {
 
   const where = `WHERE ${filters.join(' AND ')}`;
   const order =
-    params.sort === 'price_asc' ? 'inv.price_nano ASC' : params.sort === 'newest' ? 'inv.created_at DESC' : 'inv.price_nano DESC';
+    params.sort === 'price_asc' ? 'inv.price_minor ASC' : params.sort === 'newest' ? 'inv.created_at DESC' : 'inv.price_minor DESC';
 
   const totals = await queryOne<{ count: string; sum: string | null }>(
-    `SELECT count(*)::text AS count, sum(inv.price_nano)::text AS sum
+    `SELECT count(*)::text AS count, sum(inv.price_minor)::text AS sum
        FROM inventory inv ${where}`,
     values,
   );
@@ -115,7 +115,7 @@ export async function listInventory(params: {
   return {
     items: rows.map(mapInventoryItem),
     total: Number(totals?.count ?? '0'),
-    totalValueNano: toBigInt(totals?.sum ?? '0'),
+    totalValueMinor: toBigInt(totals?.sum ?? '0'),
   };
 }
 
@@ -150,7 +150,7 @@ export async function addItemToInventory(
   params: {
     userId: string;
     itemId: string;
-    priceNano: bigint;
+    priceMinor: bigint;
     condition: Condition;
     acquiredFrom: 'upgrade' | 'purchase' | 'admin' | 'bonus' | 'test' | 'system';
     sourceId?: string;
@@ -158,12 +158,12 @@ export async function addItemToInventory(
   client: PoolClient,
 ): Promise<string> {
   const row = await queryOne<{ id: string }>(
-    `INSERT INTO inventory (user_id, item_id, price_nano, condition, acquired_from, source_id)
+    `INSERT INTO inventory (user_id, item_id, price_minor, condition, acquired_from, source_id)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
     [
       params.userId,
       params.itemId,
-      params.priceNano.toString(),
+      params.priceMinor.toString(),
       params.condition,
       params.acquiredFrom,
       params.sourceId ?? null,
@@ -182,15 +182,15 @@ export async function setInventoryStatus(
 }
 
 /** Продажа предмета обратно площадке: предмет списывается, баланс пополняется. */
-export async function sellInventoryItem(userId: string, inventoryId: string): Promise<{ amountNano: bigint }> {
+export async function sellInventoryItem(userId: string, inventoryId: string): Promise<{ amountMinor: bigint }> {
   return withTransaction(async (client) => {
     const row = await lockInventoryItem(userId, inventoryId, client);
-    const amountNano = toBigInt(row.price_nano);
+    const amountMinor = toBigInt(row.price_minor);
     await setInventoryStatus(inventoryId, 'consumed', client);
     await applyBalanceChange(
       {
         userId,
-        amountNano,
+        amountMinor,
         type: 'item_sell',
         referenceType: 'inventory',
         referenceId: inventoryId,
@@ -198,6 +198,6 @@ export async function sellInventoryItem(userId: string, inventoryId: string): Pr
       },
       client,
     );
-    return { amountNano };
+    return { amountMinor };
   });
 }

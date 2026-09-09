@@ -23,8 +23,8 @@ import { query, queryOne, withTransaction, type Db } from '../db/tx';
 import { env } from '../config/env';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors';
 import { logger } from '../lib/logger';
-import { money, nanoToTon, toBigInt, type MoneyDto } from '../lib/money';
-import { getDepositSettings } from './settingsService';
+import { money, nanoToMinor, nanoToTon, toBigInt, tonMoney, type MoneyDto, type TonMoneyDto } from '../lib/money';
+import { getDepositSettings, getRateSettings } from './settingsService';
 import { applyBalanceChange } from './balanceService';
 import type { TonIncomingTransaction } from '../ton/TonProvider';
 
@@ -32,6 +32,8 @@ export type DepositStatus = 'pending' | 'confirmed' | 'failed' | 'expired';
 
 interface DepositRow {
   id: string;
+  credited_minor: string;
+  rate_minor_per_ton: string | null;
   user_id: string;
   payment_id: string;
   wallet_address: string;
@@ -52,9 +54,17 @@ export interface DepositDto {
   id: string;
   paymentId: string;
   walletAddress: string;
-  amount: MoneyDto;
+  /** Сумма к оплате в TON. */
+  amount: TonMoneyDto;
   amountTon: string;
-  received: MoneyDto;
+  /** Фактически полученная сумма в TON. */
+  received: TonMoneyDto;
+  /** Зачислено на баланс в монетах. */
+  credited: MoneyDto;
+  /** Курс, по которому идёт зачисление: монет за 1 TON. */
+  coinsPerTon: string;
+  /** Сколько монет будет зачислено при полной оплате. */
+  expectedCoins: MoneyDto;
   status: DepositStatus;
   txHash: string | null;
   confirmations: number;
@@ -69,16 +79,20 @@ export interface DepositDto {
   qrCode?: string;
 }
 
-function mapDeposit(row: DepositRow): DepositDto {
+function mapDeposit(row: DepositRow, minorPerTon: bigint): DepositDto {
   const amountNano = toBigInt(row.amount_nano);
+  const rateMinorPerTon = row.rate_minor_per_ton ? toBigInt(row.rate_minor_per_ton) : minorPerTon;
   const secondsLeft = Math.max(0, Math.floor((new Date(row.expires_at).getTime() - Date.now()) / 1000));
   return {
     id: row.id,
     paymentId: row.payment_id,
     walletAddress: row.wallet_address,
-    amount: money(amountNano),
+    amount: tonMoney(amountNano),
     amountTon: nanoToTon(amountNano),
-    received: money(toBigInt(row.received_nano)),
+    received: tonMoney(toBigInt(row.received_nano)),
+    credited: money(toBigInt(row.credited_minor)),
+    coinsPerTon: (rateMinorPerTon / 100n).toString(),
+    expectedCoins: money(nanoToMinor(amountNano, rateMinorPerTon)),
     status: row.status,
     txHash: row.tx_hash,
     confirmations: row.confirmations,
@@ -117,6 +131,7 @@ export function getWalletAddress(): string {
 /** Создание счёта на пополнение. */
 export async function createDeposit(params: { userId: string; amountNano: bigint }): Promise<DepositDto> {
   const settings = await getDepositSettings();
+  const rates = await getRateSettings();
   const walletAddress = getWalletAddress();
 
   if (params.amountNano < settings.minDepositNano) {
@@ -147,8 +162,8 @@ export async function createDeposit(params: { userId: string; amountNano: bigint
     if (existing) continue;
 
     const row = await queryOne<DepositRow>(
-      `INSERT INTO deposits (user_id, payment_id, wallet_address, amount_nano, expires_at, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      `INSERT INTO deposits (user_id, payment_id, wallet_address, amount_nano, expires_at, metadata, rate_minor_per_ton)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
        RETURNING *`,
       [
         params.userId,
@@ -157,9 +172,10 @@ export async function createDeposit(params: { userId: string; amountNano: bigint
         params.amountNano.toString(),
         expiresAt,
         JSON.stringify({ provider: env.ton.provider, minConfirmations: settings.minConfirmations }),
+        rates.minorPerTon.toString(),
       ],
     );
-    return withQrCode(mapDeposit(row!));
+    return withQrCode(mapDeposit(row!, rates.minorPerTon));
   }
 
   throw new AppError('Не удалось создать счёт на пополнение, попробуйте ещё раз', {
@@ -188,7 +204,8 @@ export async function getDeposit(userId: string, depositId: string): Promise<Dep
     row.status = 'expired';
   }
 
-  return withQrCode(mapDeposit(row));
+  const rates = await getRateSettings();
+  return withQrCode(mapDeposit(row, rates.minorPerTon));
 }
 
 export async function listDeposits(params: {
@@ -204,7 +221,11 @@ export async function listDeposits(params: {
     'SELECT * FROM deposits WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
     [params.userId, params.limit, params.offset],
   );
-  return { items: rows.map(mapDeposit), total: Number(totalRow?.count ?? '0') };
+  const rates = await getRateSettings();
+  return {
+    items: rows.map((row) => mapDeposit(row, rates.minorPerTon)),
+    total: Number(totalRow?.count ?? '0'),
+  };
 }
 
 /** Помечает истёкшие счета. Вызывается воркером. */
@@ -282,10 +303,20 @@ export async function creditTransaction(tx: TonIncomingTransaction, confirmation
     // Зачисляем фактически полученную сумму, а не заявленную в браузере.
     const creditNano = tx.amountNano;
 
+    // Курс фиксируется при создании счёта, поэтому изменение курса
+    // во время оплаты не меняет условия для пользователя.
+    const rates = await getRateSettings();
+    const rateMinorPerTon = deposit.rate_minor_per_ton ? toBigInt(deposit.rate_minor_per_ton) : rates.minorPerTon;
+    const creditMinor = nanoToMinor(creditNano, rateMinorPerTon);
+
+    if (creditMinor <= 0n) {
+      return { credited: false, reason: 'Сумма перевода слишком мала для зачисления', depositId: deposit.id };
+    }
+
     await applyBalanceChange(
       {
         userId: deposit.user_id,
-        amountNano: creditNano,
+        amountMinor: creditMinor,
         type: 'deposit',
         referenceType: 'deposit',
         referenceId: deposit.id,
@@ -295,6 +326,8 @@ export async function creditTransaction(tx: TonIncomingTransaction, confirmation
           sender: tx.sender,
           confirmations,
           utime: tx.utime,
+          receivedNano: creditNano.toString(),
+          rateMinorPerTon: rateMinorPerTon.toString(),
         },
       },
       client,
@@ -303,16 +336,25 @@ export async function creditTransaction(tx: TonIncomingTransaction, confirmation
     await query(
       `UPDATE deposits
           SET status = 'confirmed', received_nano = $2, tx_hash = $3, sender_address = $4,
-              confirmations = $5, confirmed_at = now()
+              confirmations = $5, confirmed_at = now(), credited_minor = $6, rate_minor_per_ton = $7
         WHERE id = $1`,
-      [deposit.id, creditNano.toString(), tx.hash, tx.sender, confirmations],
+      [
+        deposit.id,
+        creditNano.toString(),
+        tx.hash,
+        tx.sender,
+        confirmations,
+        creditMinor.toString(),
+        rateMinorPerTon.toString(),
+      ],
       client,
     );
 
     logger.info('Пополнение подтверждено', {
       depositId: deposit.id,
       paymentId: deposit.payment_id,
-      amountNano: creditNano.toString(),
+      receivedNano: creditNano.toString(),
+      creditedMinor: creditMinor.toString(),
       txHash: tx.hash,
     });
 
@@ -337,12 +379,15 @@ export async function adminConfirmDeposit(params: {
     if (!deposit) throw notFound('Счёт не найден', 'DEPOSIT_NOT_FOUND');
     if (deposit.status === 'confirmed') throw conflict('Счёт уже подтверждён', 'DEPOSIT_ALREADY_CONFIRMED');
 
+    const rates = await getRateSettings();
+    const rateMinorPerTon = deposit.rate_minor_per_ton ? toBigInt(deposit.rate_minor_per_ton) : rates.minorPerTon;
     const creditNano = params.amountNano ?? toBigInt(deposit.amount_nano);
+    const creditMinor = nanoToMinor(creditNano, rateMinorPerTon);
 
     await applyBalanceChange(
       {
         userId: deposit.user_id,
-        amountNano: creditNano,
+        amountMinor: creditMinor,
         type: 'deposit',
         referenceType: 'deposit',
         referenceId: deposit.id,
@@ -355,7 +400,7 @@ export async function adminConfirmDeposit(params: {
     const updated = await queryOne<DepositRow>(
       `UPDATE deposits
           SET status = 'confirmed', received_nano = $2, tx_hash = $3, confirmed_at = now(),
-              metadata = metadata || $4::jsonb
+              credited_minor = $5, rate_minor_per_ton = $6, metadata = metadata || $4::jsonb
         WHERE id = $1
         RETURNING *`,
       [
@@ -363,9 +408,11 @@ export async function adminConfirmDeposit(params: {
         creditNano.toString(),
         params.txHash,
         JSON.stringify({ manualConfirmation: true, adminId: params.adminId }),
+        creditMinor.toString(),
+        rateMinorPerTon.toString(),
       ],
       client,
     );
-    return mapDeposit(updated!);
+    return mapDeposit(updated!, rateMinorPerTon);
   });
 }

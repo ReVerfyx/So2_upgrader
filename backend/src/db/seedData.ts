@@ -1,56 +1,116 @@
 /**
- * Демонстрационный каталог предметов.
+ * Демонстрационный каталог предметов Standoff 2.
  *
- * Изображения — нейтральные локальные placeholder-заглушки (SVG) из /public/items.
- * Реальные картинки подставляются позднее через админ-панель
- * (поле «Ссылка на изображение» у предмета) без изменения кода.
+ * Цены указаны в МОНЕТАХ (1 монета = 1 ₽) и отражают порядок рыночных цен
+ * внутриигровых предметов, но НЕ являются актуальным прайс-листом:
+ * реальная стоимость скинов Standoff 2 постоянно меняется.
+ *
+ * Актуальный каталог со своими ценами и изображениями загружается одной
+ * командой без правки кода:
+ *
+ *     npm run items:import --workspace backend -- ./catalog.json
+ *
+ * либо через админ-панель (раздел «Предметы»). Формат файла описан
+ * в docs/catalog.md, пример — в database/catalog.example.json.
+ *
+ * Изображения: по умолчанию используются нейтральные локальные заглушки
+ * из /public/items. Чтобы подставить собственные картинки, укажите базовый
+ * адрес в переменной окружения ITEMS_IMAGE_BASE_URL — тогда путь предмета
+ * будет собран как `${ITEMS_IMAGE_BASE_URL}/<slug>.png`.
  */
+
+export type SeedRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'arcane' | 'contraband';
+export type SeedCondition = 'factory_new' | 'minimal_wear' | 'field_tested' | 'well_worn' | 'battle_scarred';
+
 export interface SeedItem {
   slug: string;
   name: string;
   weapon: string;
-  rarity: 'common' | 'rare' | 'epic' | 'legendary' | 'arcane' | 'contraband';
-  condition: 'factory_new' | 'minimal_wear' | 'field_tested' | 'well_worn' | 'battle_scarred';
-  priceTon: string;
-  image: string;
+  rarity: SeedRarity;
+  condition: SeedCondition;
+  /** Цена в монетах (1 монета = 1 ₽). */
+  priceCoins: string;
+  image?: string;
 }
 
-const img = (rarity: string) => `/items/placeholder-${rarity}.svg`;
+/** Базовый адрес изображений предметов (если задан — используется вместо заглушек). */
+const IMAGE_BASE = (process.env.ITEMS_IMAGE_BASE_URL || '').replace(/\/+$/, '');
 
+/** Путь к изображению: собственный CDN либо локальная заглушка по типу оружия. */
+export function resolveImage(item: Pick<SeedItem, 'slug' | 'weapon' | 'rarity'>): string {
+  if (IMAGE_BASE) return `${IMAGE_BASE}/${item.slug}.png`;
+  const kind = WEAPON_KIND[item.weapon] ?? 'rifle';
+  return `/items/${kind}-${item.rarity}.svg`;
+}
+
+/** Соответствие «оружие → тип силуэта заглушки». */
+export const WEAPON_KIND: Record<string, string> = {
+  AKR: 'rifle',
+  M4: 'rifle',
+  M4A1: 'rifle',
+  Famas: 'rifle',
+  AUG: 'rifle',
+  AWM: 'sniper',
+  'Scar-H': 'sniper',
+  M60: 'rifle',
+  MP5: 'smg',
+  UMP: 'smg',
+  'Tec-9': 'pistol',
+  USP: 'pistol',
+  P350: 'pistol',
+  'Desert Eagle': 'pistol',
+  Нож: 'knife',
+  Перчатки: 'gloves',
+  Граната: 'grenade',
+};
+
+/**
+ * Каталог. Использованы реальные виды оружия Standoff 2 и общеупотребимые
+ * названия расцветок. Перед запуском в бой замените каталог своим прайсом.
+ */
 export const SEED_ITEMS: SeedItem[] = [
-  { slug: 'ak-desert-sand', name: 'AKR | Пески пустыни', weapon: 'AKR', rarity: 'common', condition: 'field_tested', priceTon: '0.35', image: img('common') },
-  { slug: 'm4-urban-grey', name: 'M4 | Городской серый', weapon: 'M4', rarity: 'common', condition: 'well_worn', priceTon: '0.42', image: img('common') },
-  { slug: 'usp-carbon', name: 'USP | Карбон', weapon: 'USP', rarity: 'common', condition: 'minimal_wear', priceTon: '0.58', image: img('common') },
-  { slug: 'p350-steel', name: 'P350 | Сталь', weapon: 'P350', rarity: 'common', condition: 'factory_new', priceTon: '0.72', image: img('common') },
-  { slug: 'mp5-forest', name: 'MP5 | Лесной камуфляж', weapon: 'MP5', rarity: 'common', condition: 'field_tested', priceTon: '0.95', image: img('common') },
+  // --- Пистолеты и бюджетное оружие -----------------------------------------
+  { slug: 'p350-sandstorm', name: 'P350 | Песчаная буря', weapon: 'P350', rarity: 'common', condition: 'field_tested', priceCoins: '35' },
+  { slug: 'usp-carbon', name: 'USP | Карбон', weapon: 'USP', rarity: 'common', condition: 'minimal_wear', priceCoins: '60' },
+  { slug: 'tec9-graffiti', name: 'Tec-9 | Граффити', weapon: 'Tec-9', rarity: 'common', condition: 'field_tested', priceCoins: '85' },
+  { slug: 'mp5-forest', name: 'MP5 | Лесной камуфляж', weapon: 'MP5', rarity: 'common', condition: 'field_tested', priceCoins: '120' },
+  { slug: 'ump-urban', name: 'UMP | Городской', weapon: 'UMP', rarity: 'common', condition: 'well_worn', priceCoins: '150' },
+  { slug: 'akr-desert-sand', name: 'AKR | Пески пустыни', weapon: 'AKR', rarity: 'common', condition: 'field_tested', priceCoins: '190' },
 
-  { slug: 'ak-blue-steel', name: 'AKR | Вороненая сталь', weapon: 'AKR', rarity: 'rare', condition: 'minimal_wear', priceTon: '1.40', image: img('rare') },
-  { slug: 'm4-crimson', name: 'M4 | Багровый рассвет', weapon: 'M4', rarity: 'rare', condition: 'field_tested', priceTon: '1.88', image: img('rare') },
-  { slug: 'awp-glacier', name: 'AWM | Ледник', weapon: 'AWM', rarity: 'rare', condition: 'factory_new', priceTon: '2.60', image: img('rare') },
-  { slug: 'ump-neon-grid', name: 'UMP | Неоновая сетка', weapon: 'UMP', rarity: 'rare', condition: 'minimal_wear', priceTon: '3.15', image: img('rare') },
-  { slug: 'kukri-rust', name: 'Кукри | Ржавчина', weapon: 'Нож', rarity: 'rare', condition: 'battle_scarred', priceTon: '4.20', image: img('rare') },
+  // --- Редкие ---------------------------------------------------------------
+  { slug: 'm4-urban-camo', name: 'M4 | Городской камуфляж', weapon: 'M4', rarity: 'rare', condition: 'minimal_wear', priceCoins: '280' },
+  { slug: 'akr-blue-steel', name: 'AKR | Вороненая сталь', weapon: 'AKR', rarity: 'rare', condition: 'minimal_wear', priceCoins: '420' },
+  { slug: 'famas-neon', name: 'Famas | Неон', weapon: 'Famas', rarity: 'rare', condition: 'factory_new', priceCoins: '560' },
+  { slug: 'awm-glacier', name: 'AWM | Ледник', weapon: 'AWM', rarity: 'rare', condition: 'factory_new', priceCoins: '750' },
+  { slug: 'deagle-crimson', name: 'Desert Eagle | Багровый', weapon: 'Desert Eagle', rarity: 'rare', condition: 'field_tested', priceCoins: '980' },
+  { slug: 'ump-cyber-grid', name: 'UMP | Кибер-сетка', weapon: 'UMP', rarity: 'rare', condition: 'minimal_wear', priceCoins: '1250' },
 
-  { slug: 'ak-neon-rider', name: 'AKR | Неоновый всадник', weapon: 'AKR', rarity: 'epic', condition: 'factory_new', priceTon: '6.50', image: img('epic') },
-  { slug: 'm4-hyperbeast', name: 'M4 | Гиперзверь', weapon: 'M4', rarity: 'epic', condition: 'minimal_wear', priceTon: '8.90', image: img('epic') },
-  { slug: 'awp-asiimov', name: 'AWM | Асимов', weapon: 'AWM', rarity: 'epic', condition: 'field_tested', priceTon: '12.40', image: img('epic') },
-  { slug: 'desert-eagle-code', name: 'Desert Eagle | Код доступа', weapon: 'Desert Eagle', rarity: 'epic', condition: 'factory_new', priceTon: '15.80', image: img('epic') },
-  { slug: 'butterfly-tiger', name: 'Бабочка | Тигр', weapon: 'Нож', rarity: 'epic', condition: 'minimal_wear', priceTon: '19.90', image: img('epic') },
+  // --- Эпические ------------------------------------------------------------
+  { slug: 'akr-cyber-skull', name: 'AKR | Кибер-череп', weapon: 'AKR', rarity: 'epic', condition: 'factory_new', priceCoins: '1800' },
+  { slug: 'm4-hyperbeast', name: 'M4 | Гиперзверь', weapon: 'M4', rarity: 'epic', condition: 'minimal_wear', priceCoins: '2400' },
+  { slug: 'awm-asiimov', name: 'AWM | Асимов', weapon: 'AWM', rarity: 'epic', condition: 'field_tested', priceCoins: '3200' },
+  { slug: 'kukri-rust', name: 'Кукри | Ржавчина', weapon: 'Нож', rarity: 'epic', condition: 'battle_scarred', priceCoins: '4100' },
+  { slug: 'deagle-access-code', name: 'Desert Eagle | Код доступа', weapon: 'Desert Eagle', rarity: 'epic', condition: 'factory_new', priceCoins: '5300' },
+  { slug: 'tanto-tiger', name: 'Танто | Тигр', weapon: 'Нож', rarity: 'epic', condition: 'minimal_wear', priceCoins: '6800' },
 
-  { slug: 'ak-legendary-dragon', name: 'AKR | Дракон', weapon: 'AKR', rarity: 'legendary', condition: 'factory_new', priceTon: '28.00', image: img('legendary') },
-  { slug: 'm4-golden-eagle', name: 'M4 | Золотой орёл', weapon: 'M4', rarity: 'legendary', condition: 'minimal_wear', priceTon: '36.50', image: img('legendary') },
-  { slug: 'awp-phantom', name: 'AWM | Фантом', weapon: 'AWM', rarity: 'legendary', condition: 'factory_new', priceTon: '48.00', image: img('legendary') },
-  { slug: 'karambit-fade', name: 'Керамбит | Градиент', weapon: 'Нож', rarity: 'legendary', condition: 'factory_new', priceTon: '64.00', image: img('legendary') },
-  { slug: 'bayonet-marble', name: 'Штык-нож | Мрамор', weapon: 'Нож', rarity: 'legendary', condition: 'minimal_wear', priceTon: '82.00', image: img('legendary') },
+  // --- Легендарные ----------------------------------------------------------
+  { slug: 'akr-dragon', name: 'AKR | Дракон', weapon: 'AKR', rarity: 'legendary', condition: 'factory_new', priceCoins: '9500' },
+  { slug: 'kunai-blood', name: 'Кунай | Кровавый', weapon: 'Нож', rarity: 'legendary', condition: 'minimal_wear', priceCoins: '13000' },
+  { slug: 'm4-golden-eagle', name: 'M4 | Золотой орёл', weapon: 'M4', rarity: 'legendary', condition: 'minimal_wear', priceCoins: '17500' },
+  { slug: 'awm-phantom', name: 'AWM | Фантом', weapon: 'AWM', rarity: 'legendary', condition: 'factory_new', priceCoins: '23000' },
+  { slug: 'butterfly-marble', name: 'Бабочка | Мрамор', weapon: 'Нож', rarity: 'legendary', condition: 'factory_new', priceCoins: '31000' },
+  { slug: 'm9-bayonet-fade', name: 'M9 Байонет | Градиент', weapon: 'Нож', rarity: 'legendary', condition: 'factory_new', priceCoins: '42000' },
 
-  { slug: 'ak-arcane-storm', name: 'AKR | Арканный шторм', weapon: 'AKR', rarity: 'arcane', condition: 'factory_new', priceTon: '110.00', image: img('arcane') },
-  { slug: 'awp-void-walker', name: 'AWM | Странник пустоты', weapon: 'AWM', rarity: 'arcane', condition: 'factory_new', priceTon: '145.00', image: img('arcane') },
-  { slug: 'karambit-doppler', name: 'Керамбит | Доплер', weapon: 'Нож', rarity: 'arcane', condition: 'factory_new', priceTon: '190.00', image: img('arcane') },
-  { slug: 'butterfly-sapphire', name: 'Бабочка | Сапфир', weapon: 'Нож', rarity: 'arcane', condition: 'factory_new', priceTon: '260.00', image: img('arcane') },
+  // --- Арканные -------------------------------------------------------------
+  { slug: 'karambit-doppler', name: 'Керамбит | Доплер', weapon: 'Нож', rarity: 'arcane', condition: 'factory_new', priceCoins: '58000' },
+  { slug: 'karambit-fade', name: 'Керамбит | Градиент', weapon: 'Нож', rarity: 'arcane', condition: 'factory_new', priceCoins: '74000' },
+  { slug: 'butterfly-sapphire', name: 'Бабочка | Сапфир', weapon: 'Нож', rarity: 'arcane', condition: 'factory_new', priceCoins: '95000' },
 
-  { slug: 'gloves-crimson-web', name: 'Перчатки | Багровая паутина', weapon: 'Перчатки', rarity: 'contraband', condition: 'factory_new', priceTon: '340.00', image: img('contraband') },
-  { slug: 'karambit-ruby', name: 'Керамбит | Рубин', weapon: 'Нож', rarity: 'contraband', condition: 'factory_new', priceTon: '480.00', image: img('contraband') },
-  { slug: 'awp-dragon-lore', name: 'AWM | Наследие дракона', weapon: 'AWM', rarity: 'contraband', condition: 'factory_new', priceTon: '720.00', image: img('contraband') },
+  // --- Контрабанда (топ рынка) ----------------------------------------------
+  { slug: 'gloves-crimson-web', name: 'Перчатки | Багровая паутина', weapon: 'Перчатки', rarity: 'contraband', condition: 'factory_new', priceCoins: '130000' },
+  { slug: 'karambit-gold', name: 'Керамбит | Золото', weapon: 'Нож', rarity: 'contraband', condition: 'factory_new', priceCoins: '185000' },
+  { slug: 'karambit-ruby', name: 'Керамбит | Рубин', weapon: 'Нож', rarity: 'contraband', condition: 'factory_new', priceCoins: '260000' },
 ];
 
 /** Стартовые предметы, выдаваемые новому пользователю в тестовом режиме. */
-export const STARTER_ITEM_SLUGS = ['ak-desert-sand', 'usp-carbon', 'mp5-forest'];
+export const STARTER_ITEM_SLUGS = ['p350-sandstorm', 'usp-carbon', 'mp5-forest'];

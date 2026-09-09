@@ -8,8 +8,8 @@
 import bcrypt from 'bcryptjs';
 import { pool } from './pool';
 import { runMigrations } from './migrate';
-import { SEED_ITEMS } from './seedData';
-import { tonToNano } from '../lib/money';
+import { resolveImage, SEED_ITEMS } from './seedData';
+import { coinsToMinor } from '../lib/money';
 import { generateClientSeed, generateServerSeed, hashServerSeed } from '../lib/fairness';
 import { env } from '../config/env';
 import { logger } from '../lib/logger';
@@ -18,15 +18,24 @@ export async function seedItems(): Promise<number> {
   let count = 0;
   for (const item of SEED_ITEMS) {
     const result = await pool.query(
-      `INSERT INTO items (slug, name, weapon, rarity, condition, image_url, price_nano)
+      `INSERT INTO items (slug, name, weapon, rarity, condition, image_url, price_minor)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (slug) DO UPDATE
          SET name = EXCLUDED.name,
              weapon = EXCLUDED.weapon,
              rarity = EXCLUDED.rarity,
-             image_url = EXCLUDED.image_url
+             image_url = EXCLUDED.image_url,
+             price_minor = EXCLUDED.price_minor
        RETURNING id`,
-      [item.slug, item.name, item.weapon, item.rarity, item.condition, item.image, tonToNano(item.priceTon).toString()],
+      [
+        item.slug,
+        item.name,
+        item.weapon,
+        item.rarity,
+        item.condition,
+        item.image ?? resolveImage(item),
+        coinsToMinor(item.priceCoins).toString(),
+      ],
     );
     if (result.rowCount) count += 1;
   }

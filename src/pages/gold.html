@@ -1,0 +1,87 @@
+<!--
+{
+  "title": "Купить голду Standoff 2 за TON — {{brand}}",
+  "description": "Пакеты голды Standoff 2 с бонусами и произвольная сумма от 50 ₽. Оплата криптовалютой TON, зачисление за 5–30 минут.",
+  "priority": "0.9",
+  "scripts": ["catalog.js"]
+}
+-->
+<section class="page-head">
+  <div class="wrap">
+    <p class="breadcrumbs"><a href="index.html">Главная</a> / Голда</p>
+    <h1>Голда Standoff 2</h1>
+    <p>Пакеты с бонусом за объём или любая сумма от 50 ₽. Цена в TON пересчитывается по курсу в момент оформления и держится час.</p>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <div class="grid grid-gold" data-gold-grid></div>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <div class="panel panel--pad-lg" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
+      <div>
+        <h2 style="margin-bottom:8px">Произвольная сумма</h2>
+        <p class="muted">
+          Нужно ровно столько, сколько не хватает до покупки в игре? Введите сумму —
+          посчитаем голду по курсу {{money.goldPriceRub}} ₽ за единицу.
+        </p>
+        <div class="notice notice--warn mt-16">
+          <span class="notice-ico" aria-hidden="true">!</span>
+          <span>Минимальный заказ — <b>{{money.minRub}} ₽</b>. Минимальный перевод в сети TON —
+            <b>{{ton.minTon}} TON</b>: если заказ дешевле, отправить нужно всё равно {{ton.minTon}} TON,
+            а разницу мы зачислим бонусной голдой к этому же заказу.</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="field" for="calc-input">
+          <span>Сумма в рублях</span>
+          <input class="input" id="calc-input" type="number" inputmode="numeric" min="50" step="10" value="1000">
+        </label>
+        <p class="field-error" id="calc-error" hidden>Минимальная сумма заказа — 50 ₽</p>
+
+        <div class="calc-presets">
+          <button type="button" class="chip" data-calc-preset="200">200 ₽</button>
+          <button type="button" class="chip" data-calc-preset="700">700 ₽</button>
+          <button type="button" class="chip" data-calc-preset="1500">1 500 ₽</button>
+          <button type="button" class="chip" data-calc-preset="5000">5 000 ₽</button>
+        </div>
+
+        <div class="calc-out">
+          <span class="muted small">Получите голды</span>
+          <b class="accent" id="calc-gold">1 388</b>
+        </div>
+        <div class="calc-out">
+          <span class="muted small">К оплате в TON</span>
+          <b id="calc-ton">—</b>
+        </div>
+        <button class="btn btn-primary btn-block" id="calc-add">Добавить в корзину</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <h2>Что нужно для зачисления</h2>
+    <div class="table-scroll mt-16">
+      <table class="tbl">
+        <thead><tr><th>Данные</th><th>Где взять</th><th>Зачем</th></tr></thead>
+        <tbody>
+          <tr><td>Ник в игре</td><td>Профиль Standoff 2, верхняя строка</td><td>Проверяем, что нашли нужный аккаунт</td></tr>
+          <tr><td>ID игрока</td><td>Профиль → значок ID рядом с ником</td><td>Основной идентификатор для выдачи</td></tr>
+          <tr><td>Telegram для связи</td><td>Ваш @username</td><td>Оператор пишет по нему и подтверждает выдачу</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted small mt-16">
+      Пароль от аккаунта, коды из SMS и доступ к почте <b>никогда не нужны</b>.
+      Если кто-то просит их от нашего имени — это мошенник, напишите нам в
+      <a class="accent" href="{{contacts.telegram}}" target="_blank" rel="noopener">{{contacts.telegramName}}</a>.
+    </p>
+  </div>
+</section>

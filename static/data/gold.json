@@ -1,0 +1,13 @@
+{
+  "_comment": "Пакеты голды. amount — сколько зачисляется, bonus — сверху за объём, priceRub — цена продажи, oldPriceRub — зачёркнутая цена для сравнения.",
+  "packs": [
+    { "id": "g-100",   "amount": 100,   "bonus": 0,    "priceRub": 69,    "oldPriceRub": 90,    "tag": "" },
+    { "id": "g-250",   "amount": 250,   "bonus": 10,   "priceRub": 169,   "oldPriceRub": 225,   "tag": "" },
+    { "id": "g-500",   "amount": 500,   "bonus": 25,   "priceRub": 329,   "oldPriceRub": 450,   "tag": "" },
+    { "id": "g-1000",  "amount": 1000,  "bonus": 75,   "priceRub": 639,   "oldPriceRub": 900,   "tag": "hit" },
+    { "id": "g-2500",  "amount": 2500,  "bonus": 250,  "priceRub": 1549,  "oldPriceRub": 2250,  "tag": "" },
+    { "id": "g-5000",  "amount": 5000,  "bonus": 600,  "priceRub": 2999,  "oldPriceRub": 4500,  "tag": "profit" },
+    { "id": "g-10000", "amount": 10000, "bonus": 1400, "priceRub": 5799,  "oldPriceRub": 9000,  "tag": "" },
+    { "id": "g-25000", "amount": 25000, "bonus": 4000, "priceRub": 13990, "oldPriceRub": 22500, "tag": "" }
+  ]
+}

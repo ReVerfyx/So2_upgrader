@@ -1,0 +1,40 @@
+{
+  "brand": "STOCK2",
+  "brandShort": "STOCK2",
+  "tagline": "Голда и скины Standoff 2",
+  "siteUrl": "https://stock2.ru",
+  "customDomain": "",
+  "ton": {
+    "address": "UQAGOkDHpml1-Z61v2pbDfJn2r7l2G8YSg3GsPrM0Do660nh",
+    "minTon": 0.88,
+    "explorer": "https://tonviewer.com/",
+    "api": [
+      {
+        "type": "tonapi",
+        "url": "https://tonapi.io/v2/blockchain/accounts/{addr}/transactions?limit=100"
+      },
+      {
+        "type": "toncenter",
+        "url": "https://toncenter.com/api/v2/getTransactions?address={addr}&limit=60"
+      }
+    ]
+  },
+  "money": {
+    "minRub": 50,
+    "goldPriceRub": 0.72,
+    "fallbackRate": 270,
+    "rateApi": "https://tonapi.io/v2/rates?tokens=ton&currencies=rub",
+    "rateTtlMin": 10,
+    "tolerance": 0.02
+  },
+  "contacts": {
+    "telegram": "https://t.me/stock2_shop",
+    "telegramName": "@stock2_shop",
+    "channel": "https://t.me/stock2_shop",
+    "channelName": "@stock2_shop",
+    "email": "support@stock2.ru"
+  },
+  "workHours": "ежедневно, 10:00 — 23:00 МСК",
+  "deliveryEta": "5–30 минут",
+  "orderPrefix": "ST2"
+}

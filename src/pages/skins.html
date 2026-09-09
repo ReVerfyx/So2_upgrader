@@ -1,0 +1,57 @@
+<!--
+{
+  "title": "Скины Standoff 2 — купить за TON | {{brand}}",
+  "description": "Каталог скинов Standoff 2: ножи, перчатки, оружие. Оплата в TON, передача внутриигровым обменом, цены в рублях и TON.",
+  "priority": "0.9",
+  "scripts": ["catalog.js"]
+}
+-->
+<section class="page-head">
+  <div class="wrap">
+    <p class="breadcrumbs"><a href="index.html">Главная</a> / Скины</p>
+    <h1>Скины Standoff 2</h1>
+    <p>Передача происходит внутриигровым обменом с аккаунта магазина. Нужного предмета нет в списке — напишите, найдём под заказ.</p>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <div class="toolbar">
+      <div class="search-box">
+        <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m13.5 13.5 3.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input class="input" id="skin-search" type="search" placeholder="Поиск: AKR, керамбит, нож…" aria-label="Поиск по каталогу">
+      </div>
+      <select class="select" id="skin-rarity" aria-label="Редкость"></select>
+      <select class="select" id="skin-sort" aria-label="Сортировка">
+        <option value="pop">Сначала популярные</option>
+        <option value="asc">Сначала дешёвые</option>
+        <option value="desc">Сначала дорогие</option>
+      </select>
+      <span class="muted small" id="skins-count"></span>
+    </div>
+
+    <div class="grid grid-skins" data-skins-grid></div>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <div class="grid grid-3">
+      <article class="feature">
+        <h3>Как проходит передача</h3>
+        <p>После оплаты оператор добавляет вас в друзья в игре и отправляет предмет обменом.
+          Понадобится только ник и ID — ничего больше.</p>
+      </article>
+      <article class="feature">
+        <h3>Сколько ждать</h3>
+        <p>{{deliveryEta}} в рабочее время ({{workHours}}). В Standoff 2 у обмена бывает
+          кулдаун у нового аккаунта — оператор предупредит заранее.</p>
+      </article>
+      <article class="feature">
+        <h3>Нет нужного скина</h3>
+        <p>Напишите в <a class="accent" href="{{contacts.telegram}}" target="_blank" rel="noopener">{{contacts.telegramName}}</a>
+          название и желаемую цену — сообщим, за сколько сможем привезти.</p>
+      </article>
+    </div>
+  </div>
+</section>

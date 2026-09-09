@@ -1,0 +1,105 @@
+<!--
+{
+  "title": "Корзина и оформление заказа — {{brand}}",
+  "description": "Проверьте состав заказа, укажите ник и ID игрока в Standoff 2 и переходите к оплате в TON.",
+  "priority": "0.5",
+  "scripts": ["cart.js"]
+}
+-->
+<section class="page-head">
+  <div class="wrap">
+    <p class="breadcrumbs"><a href="index.html">Главная</a> / Корзина</p>
+    <h1>Оформление заказа</h1>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+
+    <div id="cart-empty" hidden>
+      <div class="empty panel">
+        <svg viewBox="0 0 64 64" width="58" height="58" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <path d="M14 18h38l-4 26a6 6 0 0 1-6 5H24a6 6 0 0 1-6-5l-4-26Zm0 0-2-8H5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="26" cy="56" r="3"/><circle cx="44" cy="56" r="3"/>
+        </svg>
+        <h3>Корзина пуста</h3>
+        <p class="muted">Загляните в каталог — там пакеты голды с бонусами и скины в наличии.</p>
+        <div class="hero-cta" style="justify-content:center">
+          <a class="btn btn-primary" href="gold.html">Купить голду</a>
+          <a class="btn btn-ghost" href="skins.html">Смотреть скины</a>
+        </div>
+      </div>
+    </div>
+
+    <div id="cart-body" class="pay-grid" hidden>
+      <div>
+        <div class="panel">
+          <div class="section-head" style="margin-bottom:6px">
+            <h2 style="font-size:22px;margin:0">Ваш заказ</h2>
+            <button class="btn btn-ghost btn-sm" id="cart-clear" type="button">Очистить</button>
+          </div>
+          <div id="cart-items"></div>
+        </div>
+
+        <form class="panel mt-24" id="order-form" novalidate>
+          <h2 style="font-size:22px">Данные для выдачи</h2>
+          <p class="muted small">Пароль и коды подтверждения не нужны — только публичные данные профиля.</p>
+
+          <div class="form-grid mt-16">
+            <label class="field" for="f-nickname">
+              <span>Ник в игре *</span>
+              <input class="input" id="f-nickname" name="nickname" type="text" autocomplete="nickname" placeholder="Например, KAPKAN">
+              <span class="field-error" data-error-for="nickname" hidden></span>
+            </label>
+            <label class="field" for="f-playerid">
+              <span>ID игрока *</span>
+              <input class="input" id="f-playerid" name="playerId" type="text" inputmode="numeric" placeholder="123456789">
+              <span class="field-error" data-error-for="playerId" hidden></span>
+            </label>
+          </div>
+
+          <label class="field" for="f-contact">
+            <span>Telegram или e-mail для связи *</span>
+            <input class="input" id="f-contact" name="contact" type="text" placeholder="@username">
+            <span class="field-error" data-error-for="contact" hidden></span>
+            <span class="field-hint">Оператор напишет сюда, чтобы согласовать выдачу.</span>
+          </label>
+
+          <label class="field" for="f-note">
+            <span>Комментарий к заказу</span>
+            <textarea class="input" id="f-note" name="note" placeholder="Например: удобно принять после 18:00"></textarea>
+          </label>
+
+          <label class="checkbox">
+            <input type="checkbox" name="agree" id="f-agree">
+            <span>Согласен с <a class="accent" href="terms.html" target="_blank">условиями</a> и понимаю,
+              что перевод в криптовалюте необратим, а покупка — это товар с фиксированной ценой, а не игра на удачу.</span>
+          </label>
+
+          <button class="btn btn-primary btn-lg btn-block mt-24" id="order-submit" type="submit">
+            Перейти к оплате
+          </button>
+        </form>
+      </div>
+
+      <aside class="panel" style="position:sticky;top:88px">
+        <h3>Итого</h3>
+        <div class="summary-row"><span>Товары</span><span id="sum-subtotal">—</span></div>
+        <div class="summary-row"><span>Комиссия сервиса</span><span class="green">0 ₽</span></div>
+        <div class="summary-row summary-row--total"><span>К оплате</span><span id="sum-total">—</span></div>
+        <div class="summary-row"><span>В криптовалюте</span><span class="accent" id="sum-ton">—</span></div>
+
+        <div class="notice notice--warn mt-16" id="min-ton-note" hidden>
+          <span class="notice-ico" aria-hidden="true">!</span>
+          <span>Сеть TON принимает переводы от <b id="min-ton-value">0.88 TON</b>.
+            Ваш заказ дешевле, поэтому отправить нужно минимальную сумму — разницу зачислим бонусом к заказу.</span>
+        </div>
+
+        <p class="field-hint mt-16">
+          Курс фиксируется в момент оформления и держится 60 минут.
+          Дальше сумму можно пересчитать, собрав заказ заново.
+        </p>
+      </aside>
+    </div>
+  </div>
+</section>

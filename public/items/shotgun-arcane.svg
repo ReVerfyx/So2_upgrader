@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" role="img" aria-label="Заглушка предмета: арканное">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff4d6d" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#c01040" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="fg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff4d6d"/>
+      <stop offset="100%" stop-color="#c01040"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="240" rx="18" fill="#0f131c"/>
+  <rect width="320" height="240" rx="18" fill="url(#bg)"/>
+  <g opacity="0.92">
+    <path d="M36 128h158l14-12h44v12h20v12h-20v8h-42l-10 12h-24l-8-12H92l-6 20H66l4-20H36z" fill="url(#fg)"/>
+    <rect x="96" y="140" width="70" height="14" rx="5" fill="url(#fg)" opacity=".7"/>
+    <rect x="200" y="118" width="52" height="6" rx="3" fill="url(#fg)" opacity=".55"/>
+    <path d="M96 154h44v8H96z" fill="#0f131c" opacity=".35"/>
+    </g>
+  <text x="160" y="216" font-family="Tektur, Inter, Arial, sans-serif" font-size="13" font-weight="700"
+        fill="#ff4d6d" text-anchor="middle" letter-spacing="2.5">АРКАННОЕ</text>
+</svg>

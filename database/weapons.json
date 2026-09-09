@@ -1,0 +1,249 @@
+{
+  "$comment": "Справочник оружия Standoff 2 для генератора каталога. Правьте под актуальную версию игры: добавляйте/убирайте стволы и расцветки. priceFactor — множитель цены относительно базовой стоимости редкости.",
+  "categories": [
+    {
+      "id": "rifle",
+      "title": "Автоматы и штурмовые винтовки",
+      "weapons": [
+        {
+          "name": "AKR",
+          "priceFactor": 1.35
+        },
+        {
+          "name": "M4",
+          "priceFactor": 1.25
+        },
+        {
+          "name": "M4A1",
+          "priceFactor": 1.2
+        },
+        {
+          "name": "Famas",
+          "priceFactor": 0.85
+        },
+        {
+          "name": "AUG",
+          "priceFactor": 0.9
+        },
+        {
+          "name": "Galil",
+          "priceFactor": 0.8
+        },
+        {
+          "name": "SCAR",
+          "priceFactor": 0.95
+        }
+      ]
+    },
+    {
+      "id": "sniper",
+      "title": "Снайперские винтовки",
+      "weapons": [
+        {
+          "name": "AWM",
+          "priceFactor": 1.4
+        },
+        {
+          "name": "SSG",
+          "priceFactor": 0.75
+        },
+        {
+          "name": "M14",
+          "priceFactor": 0.8
+        }
+      ]
+    },
+    {
+      "id": "smg",
+      "title": "Пистолеты-пулемёты",
+      "weapons": [
+        {
+          "name": "MP5",
+          "priceFactor": 0.7
+        },
+        {
+          "name": "UMP45",
+          "priceFactor": 0.75
+        },
+        {
+          "name": "MP7",
+          "priceFactor": 0.65
+        },
+        {
+          "name": "P90",
+          "priceFactor": 0.8
+        }
+      ]
+    },
+    {
+      "id": "pistol",
+      "title": "Пистолеты",
+      "weapons": [
+        {
+          "name": "USP",
+          "priceFactor": 0.5
+        },
+        {
+          "name": "P350",
+          "priceFactor": 0.45
+        },
+        {
+          "name": "Desert Eagle",
+          "priceFactor": 0.95
+        },
+        {
+          "name": "Tec-9",
+          "priceFactor": 0.5
+        },
+        {
+          "name": "Five-Seven",
+          "priceFactor": 0.55
+        }
+      ]
+    },
+    {
+      "id": "shotgun",
+      "title": "Дробовики и пулемёты",
+      "weapons": [
+        {
+          "name": "M870",
+          "priceFactor": 0.6
+        },
+        {
+          "name": "SPAS",
+          "priceFactor": 0.65
+        },
+        {
+          "name": "M60",
+          "priceFactor": 0.7
+        }
+      ]
+    },
+    {
+      "id": "knife",
+      "title": "Ножи",
+      "weapons": [
+        {
+          "name": "Керамбит",
+          "priceFactor": 3.0
+        },
+        {
+          "name": "Бабочка",
+          "priceFactor": 2.6
+        },
+        {
+          "name": "M9 Байонет",
+          "priceFactor": 2.4
+        },
+        {
+          "name": "Кунай",
+          "priceFactor": 2.0
+        },
+        {
+          "name": "Танто",
+          "priceFactor": 1.6
+        },
+        {
+          "name": "Кукри",
+          "priceFactor": 1.35
+        },
+        {
+          "name": "Флип",
+          "priceFactor": 1.5
+        },
+        {
+          "name": "Скелетный нож",
+          "priceFactor": 1.7
+        },
+        {
+          "name": "Штык-нож",
+          "priceFactor": 1.9
+        }
+      ]
+    },
+    {
+      "id": "gloves",
+      "title": "Перчатки",
+      "weapons": [
+        {
+          "name": "Перчатки",
+          "priceFactor": 2.2
+        }
+      ]
+    },
+    {
+      "id": "grenade",
+      "title": "Гранаты",
+      "weapons": [
+        {
+          "name": "Граната",
+          "priceFactor": 0.35
+        }
+      ]
+    }
+  ],
+  "$finishesComment": "Названия расцветок — шаблонные. Замените их реальными названиями скинов или загрузите готовый прайс (см. docs/catalog.md).",
+  "finishes": {
+    "common": [
+      "Пески пустыни",
+      "Городской камуфляж",
+      "Карбон",
+      "Сталь",
+      "Хаки",
+      "Графит"
+    ],
+    "rare": [
+      "Вороненая сталь",
+      "Багровый рассвет",
+      "Ледник",
+      "Изумруд",
+      "Кобальт",
+      "Оникс"
+    ],
+    "epic": [
+      "Кибер-череп",
+      "Гиперзверь",
+      "Неоновый всадник",
+      "Код доступа",
+      "Токсин",
+      "Пиксельный шторм"
+    ],
+    "legendary": [
+      "Дракон",
+      "Золотой орёл",
+      "Фантом",
+      "Мрамор",
+      "Кровавый закат",
+      "Плазма"
+    ],
+    "arcane": [
+      "Доплер",
+      "Градиент",
+      "Сапфир",
+      "Аметист",
+      "Северное сияние"
+    ],
+    "contraband": [
+      "Рубин",
+      "Золото",
+      "Багровая паутина",
+      "Наследие"
+    ]
+  },
+  "$pricesComment": "Базовая цена редкости в монетах (1 монета = 1 рубль). Итог = базовая × priceFactor оружия × коэффициент состояния × детерминированный разброс 0.80–1.24. Значения откалиброваны под порядок цен рынка Standoff 2; замените своим прайсом, когда он появится.",
+  "basePrices": {
+    "common": 60,
+    "rare": 260,
+    "epic": 1100,
+    "legendary": 3800,
+    "arcane": 9500,
+    "contraband": 17000
+  },
+  "conditionFactors": {
+    "factory_new": 1.0,
+    "minimal_wear": 0.82,
+    "field_tested": 0.64,
+    "well_worn": 0.5,
+    "battle_scarred": 0.38
+  }
+}

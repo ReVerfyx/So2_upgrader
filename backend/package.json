@@ -16,10 +16,15 @@
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "vitest run",
     "items:import": "tsx src/db/importCatalog.ts",
-    "items:import:prod": "node dist/db/importCatalog.js"
+    "items:import:prod": "node dist/db/importCatalog.js",
+    "catalog:inspect": "tsx src/db/buildCatalog.ts inspect",
+    "catalog:scrape": "tsx src/db/buildCatalog.ts scrape",
+    "catalog:csv": "tsx src/db/buildCatalog.ts csv",
+    "catalog:generate": "tsx src/db/buildCatalog.ts generate"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

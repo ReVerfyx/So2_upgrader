@@ -42,3 +42,5 @@ docker/pgdata/
 .idea/
 .DS_Store
 Thumbs.db
+/backend/catalog.json
+catalog.json

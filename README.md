@@ -30,7 +30,7 @@ Telegram: [@stock2_shop](https://t.me/stock2_shop)
 | --- | --- |
 | Бэкенд | Node.js 20+, TypeScript, Express, PostgreSQL 16 (`pg`, без ORM), zod, bcryptjs |
 | Фронтенд | React 18, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query |
-| Тесты | Vitest + Supertest (90 тестов бэкенда, 14 фронтенда) |
+| Тесты | Vitest + Supertest (114 тестов бэкенда, 14 фронтенда) |
 | Инфраструктура | Docker Compose, nginx, GitHub Actions |
 
 Дизайн-система построена по референсу upgrader.vip — см. [docs/reference.md](docs/reference.md).
@@ -224,15 +224,39 @@ docker compose up -d --build
 * Курс меняется в админ-панели (раздел «Коэффициенты») или переменной
   `COIN_MINOR_PER_TON`.
 
-### Свой каталог скинов и цен
+### Каталог скинов: сборка и загрузка
 
-Каталог не «зашит» в код: цены на скины Standoff 2 постоянно меняются.
-Загрузите свой прайс одной командой:
+Каталог не «зашит» в код — цены на скины Standoff 2 постоянно меняются.
+Есть сборщик, который готовит файл каталога четырьмя способами:
+
+```bash
+# 1. Сгенерировать из справочника оружия (≈850 предметов, 9–59 000 монет)
+npm run catalog:generate --workspace backend
+
+# 2. Собрать с сайта-прайса: сначала посмотреть, что распознаётся
+npm run catalog:inspect --workspace backend -- --url https://пример.ру/market
+npm run catalog:scrape  --workspace backend -- --url https://пример.ру/market
+
+# 3. Из выгрузки Excel или Google Таблиц
+npm run catalog:csv --workspace backend -- prices.csv
+
+# 4. Файл, написанный руками (формат — в docs/catalog.md)
+```
+
+Скрапер пробует четыре стратегии: JSON внутри страницы (`__NEXT_DATA__`,
+`__NUXT__`), HTML-таблицы, повторяющиеся карточки и ваши CSS-селекторы.
+Тип оружия, редкость и состояние определяются по названию и цене.
+
+Готовый файл загружается в базу:
 
 ```bash
 npm run items:import --workspace backend -- ./catalog.json
 npm run items:import --workspace backend -- ./catalog.json --deactivate-missing
 ```
+
+Справочник оружия для генератора — `database/weapons.json`:
+33 ствола по категориям, расцветки, базовые цены по редкости и коэффициенты
+состояния. Правится в одном файле без изменения кода.
 
 Формат файла и работа с изображениями — [docs/catalog.md](docs/catalog.md),
 пример — `database/catalog.example.json`. Предметы также правятся вручную
@@ -386,7 +410,7 @@ npm run migrate
 ```bash
 npm run typecheck    # TypeScript обоих пакетов
 npm run lint         # ESLint
-npm run test         # Vitest: 90 тестов бэкенда + 14 фронтенда
+npm run test         # Vitest: 114 тестов бэкенда + 14 фронтенда
 npm run build        # сборка backend и frontend
 ```
 

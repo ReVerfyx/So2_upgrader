@@ -87,6 +87,18 @@ export const env = {
     cookieName: str('SESSION_COOKIE_NAME', 'so2_session'),
     csrfCookieName: str('CSRF_COOKIE_NAME', 'so2_csrf'),
     bcryptRounds: num('BCRYPT_ROUNDS', isTest ? 4 : 12),
+    /**
+     * Флаг Secure у cookie сессии. По умолчанию включён в production.
+     * Отключайте только если сайт доступен по http (например, локальный
+     * запуск или внутренний контур) — иначе браузер не сохранит сессию.
+     */
+    cookieSecure: bool('COOKIE_SECURE', isProduction),
+  },
+
+  /** Раздача собранного фронтенда тем же процессом (деплой без nginx). */
+  frontend: {
+    serve: bool('SERVE_FRONTEND', false),
+    dir: str('FRONTEND_DIR', ''),
   },
 
   google: {
@@ -98,12 +110,25 @@ export const env = {
 
   ton: {
     walletAddress: str('TON_WALLET_ADDRESS', ''),
-    provider: str('TON_PROVIDER', 'mock') as 'toncenter' | 'mock',
+    provider: str('TON_PROVIDER', 'mock') as 'toncenter' | 'tonapi' | 'mock',
     apiKey: str('TON_API_KEY', ''),
     apiBaseUrl: str('TON_API_BASE_URL', 'https://toncenter.com/api/v2'),
     minConfirmations: num('TON_MIN_CONFIRMATIONS', 1),
     pollIntervalMs: num('TON_POLL_INTERVAL_MS', 20_000),
     watcherEnabled: bool('TON_WATCHER_ENABLED', !isTest),
+  },
+
+  rates: {
+    /** Источники курса в порядке приоритета. */
+    providers: str('RATE_PROVIDERS', 'coingecko,tonapi,binance+cbr'),
+    /** Как часто обновлять курс, минут. */
+    refreshMinutes: num('RATE_REFRESH_MINUTES', 15),
+    /** Максимальный возраст курса, после которого пополнение блокируется (0 — не проверять). */
+    maxAgeMinutes: num('RATE_MAX_AGE_MINUTES', 180),
+    /** Спред площадки к рыночному курсу, %. */
+    spreadPercent: num('RATE_SPREAD_PERCENT', 3),
+    /** Обновлять ли курс автоматически. */
+    auto: bool('RATE_AUTO_UPDATE', true),
   },
 
   economy: {

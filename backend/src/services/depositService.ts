@@ -27,6 +27,8 @@ import { money, nanoToMinor, nanoToTon, toBigInt, tonMoney, type MoneyDto, type 
 import { getDepositSettings, getRateSettings } from './settingsService';
 import { applyBalanceChange } from './balanceService';
 import type { TonIncomingTransaction } from '../ton/TonProvider';
+import { isSameAddress, isValidTonAddress } from '../ton/address';
+import { getUsableRate } from './rateService';
 
 export type DepositStatus = 'pending' | 'confirmed' | 'failed' | 'expired';
 
@@ -119,19 +121,28 @@ function generatePaymentId(): string {
 }
 
 export function getWalletAddress(): string {
-  if (!env.ton.walletAddress) {
+  const address = env.ton.walletAddress;
+  if (!address) {
     throw new AppError('Пополнение временно недоступно: не настроен кошелёк площадки', {
       status: 503,
       code: 'TON_WALLET_NOT_CONFIGURED',
     });
   }
-  return env.ton.walletAddress;
+  if (!isValidTonAddress(address)) {
+    throw new AppError('Пополнение временно недоступно: адрес кошелька площадки некорректен', {
+      status: 503,
+      code: 'TON_WALLET_INVALID',
+    });
+  }
+  return address;
 }
 
 /** Создание счёта на пополнение. */
 export async function createDeposit(params: { userId: string; amountNano: bigint }): Promise<DepositDto> {
   const settings = await getDepositSettings();
-  const rates = await getRateSettings();
+  // getUsableRate откажет, если курс устарел: лучше не выставить счёт,
+  // чем зачислить деньги по неактуальному курсу.
+  const rates = await getUsableRate();
   const walletAddress = getWalletAddress();
 
   if (params.amountNano < settings.minDepositNano) {
@@ -254,6 +265,14 @@ export interface CreditResult {
  *  - UNIQUE-индекс deposits.tx_hash на уровне БД (гонки исключены).
  */
 export async function creditTransaction(tx: TonIncomingTransaction, confirmations: number): Promise<CreditResult> {
+  // Перевод должен быть адресован именно кошельку площадки.
+  // Адреса сравниваются по содержимому: UQ…, EQ… и 0:… — одно и то же.
+  if (env.ton.walletAddress && !isSameAddress(tx.destination, env.ton.walletAddress)) {
+    return { credited: false, reason: 'Перевод адресован другому кошельку' };
+  }
+
+  if (tx.amountNano <= 0n) return { credited: false, reason: 'Нулевая сумма перевода' };
+
   const comment = tx.comment?.trim();
   if (!comment) return { credited: false, reason: 'Транзакция без комментария' };
 

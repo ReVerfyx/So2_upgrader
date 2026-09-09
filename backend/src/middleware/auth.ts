@@ -56,7 +56,7 @@ export const requireAdmin: RequestHandler = (req, _res, next) => {
 export function setSessionCookie(res: Response, token: string, csrfToken: string, expiresAt: Date): void {
   res.cookie(env.security.cookieName, token, {
     httpOnly: true,
-    secure: env.isProduction,
+    secure: env.security.cookieSecure,
     sameSite: 'lax',
     expires: expiresAt,
     path: '/',
@@ -64,7 +64,7 @@ export function setSessionCookie(res: Response, token: string, csrfToken: string
   // CSRF-токен читается фронтендом и возвращается в заголовке X-CSRF-Token.
   res.cookie(env.security.csrfCookieName, csrfToken, {
     httpOnly: false,
-    secure: env.isProduction,
+    secure: env.security.cookieSecure,
     sameSite: 'lax',
     expires: expiresAt,
     path: '/',

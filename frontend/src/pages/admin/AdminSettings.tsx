@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiRequest } from '../../lib/api';
 import { useToast } from '../../hooks/useToast';
 import { RowsSkeleton } from '../../components/Skeleton';
+import type { RateInfo } from '../../types/api';
 
 interface SettingsResponse {
   settings: {
@@ -15,7 +16,14 @@ interface SettingsResponse {
       minStakeMinor?: string;
     };
     deposit?: { minDepositNano: string; ttlMinutes: number; minConfirmations: number };
-    rates?: { minorPerTon: string; source: string; updatedAt: string | null };
+    rates?: {
+      minorPerTon: string;
+      marketRubPerTon?: number | null;
+      spreadPercent?: number;
+      auto?: boolean;
+      source: string;
+      updatedAt: string | null;
+    };
     site?: { maintenance: boolean; announcement: string };
   };
 }
@@ -38,7 +46,7 @@ export function AdminSettings(): JSX.Element {
   const [upgrade, setUpgrade] = useState({ houseEdge: 8, minChance: 0.5, maxChance: 85, maxMultiplier: 100, minStake: '0.1' });
   const [deposit, setDeposit] = useState({ minDeposit: '0.88', ttlMinutes: 30, minConfirmations: 1 });
   const [site, setSite] = useState({ maintenance: false, announcement: '' });
-  const [coinsPerTon, setCoinsPerTon] = useState('350');
+  const [rateForm, setRateForm] = useState({ auto: true, spreadPercent: 3, coinsPerTon: '350' });
 
   useEffect(() => {
     const data = query.data?.settings;
@@ -60,7 +68,13 @@ export function AdminSettings(): JSX.Element {
       });
     }
     if (data.site) setSite(data.site);
-    if (data.rates) setCoinsPerTon(String(Number(data.rates.minorPerTon) / 100));
+    if (data.rates) {
+      setRateForm({
+        auto: data.rates.auto ?? true,
+        spreadPercent: data.rates.spreadPercent ?? 3,
+        coinsPerTon: String(Number(data.rates.minorPerTon) / 100),
+      });
+    }
   }, [query.data]);
 
   const saveUpgrade = useMutation({
@@ -101,16 +115,45 @@ export function AdminSettings(): JSX.Element {
     onError: (error) => toast.error('Ошибка', error instanceof ApiError ? error.message : undefined),
   });
 
+  const rateQuery = useQuery({
+    queryKey: ['admin', 'rate'],
+    queryFn: () => apiRequest<{ rate: RateInfo }>('/admin/settings/rates'),
+    refetchInterval: 60_000,
+  });
+
+  const invalidateRates = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'rate'] });
+    void queryClient.invalidateQueries({ queryKey: ['deposit-info'] });
+  };
+
   const saveRates = useMutation({
     mutationFn: () =>
-      apiRequest('/admin/settings/rates', {
+      apiRequest<{ refreshFailures: Array<{ provider: string; message: string }> }>('/admin/settings/rates', {
         method: 'PUT',
-        body: { coinsPerTon: Number(coinsPerTon.replace(',', '.')), source: 'manual' },
+        body: {
+          auto: rateForm.auto,
+          spreadPercent: rateForm.spreadPercent,
+          coinsPerTon: rateForm.auto ? undefined : Number(rateForm.coinsPerTon.replace(',', '.')),
+        },
       }),
-    onSuccess: () => {
-      toast.success('Курс сохранён');
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
-      void queryClient.invalidateQueries({ queryKey: ['deposit-info'] });
+    onSuccess: (data) => {
+      if (data.refreshFailures?.length) {
+        toast.info('Настройки сохранены', `Источники недоступны: ${data.refreshFailures.map((f) => f.provider).join(', ')}`);
+      } else {
+        toast.success('Настройки курса сохранены');
+      }
+      invalidateRates();
+    },
+    onError: (error) => toast.error('Ошибка', error instanceof ApiError ? error.message : undefined),
+  });
+
+  const refreshRate = useMutation({
+    mutationFn: () => apiRequest<{ updated: boolean; message: string }>('/admin/settings/rates/refresh', { method: 'POST' }),
+    onSuccess: (data) => {
+      if (data.updated) toast.success('Курс обновлён', data.message);
+      else toast.error('Курс не обновлён', data.message);
+      invalidateRates();
     },
     onError: (error) => toast.error('Ошибка', error instanceof ApiError ? error.message : undefined),
   });
@@ -228,34 +271,105 @@ export function AdminSettings(): JSX.Element {
 
       <div className="space-y-4">
         <section className="panel p-4">
-          <h2 className="mb-1 font-display text-sm font-bold">Курс TON → монеты</h2>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <h2 className="font-display text-sm font-bold">Курс TON → монеты</h2>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              disabled={refreshRate.isPending}
+              onClick={() => refreshRate.mutate()}
+            >
+              {refreshRate.isPending ? 'Обновляем…' : 'Обновить сейчас'}
+            </button>
+          </div>
+
           <p className="mb-3 text-xxs leading-relaxed text-muted">
-            Внутренняя валюта — монеты: <strong className="text-white">1 монета = 1 ₽</strong>. Курс фиксируется
-            в момент создания счёта на пополнение, поэтому его изменение не влияет на уже выставленные счета.
+            Внутренняя валюта — монеты: <strong className="text-white">1 монета = 1 ₽</strong>. В автоматическом
+            режиме курс берётся с биржевых источников (CoinGecko → tonapi.io → Binance + ЦБ РФ) и обновляется сам.
+            Курс фиксируется в момент создания счёта, поэтому его изменение не влияет на выставленные счета.
           </p>
+
+          {rateQuery.data?.rate ? (
+            <dl className="mb-3 space-y-1.5 rounded-lg bg-dark p-3 text-13">
+              <div className="flex justify-between">
+                <dt className="text-muted">Текущий курс</dt>
+                <dd className="font-semibold">
+                  1 TON = {Number(rateQuery.data.rate.coinsPerTon).toLocaleString('ru-RU')} монет
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted">Рыночный курс</dt>
+                <dd>
+                  {rateQuery.data.rate.marketRubPerTon
+                    ? `${rateQuery.data.rate.marketRubPerTon.toFixed(2)} ₽`
+                    : '—'}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted">Источник</dt>
+                <dd className={rateQuery.data.rate.stale ? 'text-danger' : ''}>
+                  {rateQuery.data.rate.auto ? rateQuery.data.rate.source : 'ручной'}
+                  {rateQuery.data.rate.ageMinutes !== null ? ` · ${rateQuery.data.rate.ageMinutes} мин назад` : ''}
+                  {rateQuery.data.rate.stale ? ' · устарел' : ''}
+                </dd>
+              </div>
+            </dl>
+          ) : null}
+
           <div className="space-y-3">
+            <label className="flex items-center gap-2 text-13">
+              <input
+                type="checkbox"
+                checked={rateForm.auto}
+                onChange={(event) => setRateForm({ ...rateForm, auto: event.target.checked })}
+                className="h-4 w-4 accent-[#fbd506]"
+              />
+              Обновлять курс автоматически
+            </label>
+
             <div>
-              <label className="label" htmlFor="coinsPerTon">
-                Монет за 1 TON
+              <label className="label" htmlFor="spread">
+                Спред площадки, % ({rateForm.spreadPercent}%)
               </label>
               <input
-                id="coinsPerTon"
-                className="input"
-                inputMode="decimal"
-                value={coinsPerTon}
-                onChange={(event) => setCoinsPerTon(event.target.value.replace(/[^\d.,]/g, ''))}
+                id="spread"
+                type="range"
+                min={0}
+                max={20}
+                step={0.5}
+                value={rateForm.spreadPercent}
+                onChange={(event) => setRateForm({ ...rateForm, spreadPercent: Number(event.target.value) })}
+                className="range-accent"
               />
               <p className="mt-1 text-xxs text-muted">
-                Пополнение на 1 TON зачислит {Number(coinsPerTon.replace(',', '.') || 0).toLocaleString('ru-RU')} монет.
+                Курс зачисления ниже рыночного на эту величину — покрывает комиссию сети и колебания цены.
               </p>
             </div>
+
+            {!rateForm.auto ? (
+              <div>
+                <label className="label" htmlFor="coinsPerTon">
+                  Монет за 1 TON (ручной курс)
+                </label>
+                <input
+                  id="coinsPerTon"
+                  className="input"
+                  inputMode="decimal"
+                  value={rateForm.coinsPerTon}
+                  onChange={(event) =>
+                    setRateForm({ ...rateForm, coinsPerTon: event.target.value.replace(/[^\d.,]/g, '') })
+                  }
+                />
+              </div>
+            ) : null}
+
             <button
               type="button"
               className="btn-primary w-full"
-              disabled={saveRates.isPending || !Number(coinsPerTon.replace(',', '.'))}
+              disabled={saveRates.isPending}
               onClick={() => saveRates.mutate()}
             >
-              Сохранить курс
+              Сохранить настройки курса
             </button>
           </div>
         </section>

@@ -16,7 +16,7 @@ import { RowsSkeleton, Skeleton } from '../components/Skeleton';
 import { StatusBadge } from '../components/StatusBadge';
 import { DEPOSIT_STATUS_LABELS, formatCountdown, formatDateTime, shorten } from '../lib/format';
 import { TelegramLink } from '../components/TelegramLink';
-import type { Deposit, Paged } from '../types/api';
+import type { Deposit, Paged, RateInfo } from '../types/api';
 
 function CopyField({ label, value }: { label: string; value: string }): JSX.Element {
   const toast = useToast();
@@ -60,6 +60,7 @@ export function DepositPage(): JSX.Element {
         minDeposit: { ton: string; formatted: string };
         minDepositCoins: { coins: string; formatted: string };
         coinsPerTon: string;
+        rate: RateInfo;
         ttlMinutes: number;
         minConfirmations: number;
         configured: boolean;
@@ -182,6 +183,17 @@ export function DepositPage(): JSX.Element {
                     1 TON = {Number(infoQuery.data?.coinsPerTon ?? 0).toLocaleString('ru-RU')} монет
                   </span>
                 </div>
+                {infoQuery.data?.rate ? (
+                  <div className="flex items-center justify-between">
+                    <span>Источник курса</span>
+                    <span className={infoQuery.data.rate.stale ? 'text-danger' : 'text-muted'}>
+                      {infoQuery.data.rate.auto ? infoQuery.data.rate.source : 'ручной'}
+                      {infoQuery.data.rate.ageMinutes !== null
+                        ? ` · ${infoQuery.data.rate.ageMinutes} мин назад`
+                        : ''}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <span>Будет зачислено</span>
                   <Money

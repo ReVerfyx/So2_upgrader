@@ -123,7 +123,7 @@ authRouter.get(
     // Дублируем state в httpOnly cookie — вторая линия защиты от CSRF.
     res.cookie(GOOGLE_STATE_COOKIE, state, {
       httpOnly: true,
-      secure: env.isProduction,
+      secure: env.security.cookieSecure,
       sameSite: 'lax',
       maxAge: 10 * 60_000,
       path: '/',

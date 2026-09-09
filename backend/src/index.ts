@@ -5,6 +5,7 @@ import { logger } from './lib/logger';
 import { pool } from './db/pool';
 import { runMigrations } from './db/migrate';
 import { startDepositWatcher, stopDepositWatcher } from './workers/depositWatcher';
+import { startRateWatcher, stopRateWatcher } from './workers/rateWatcher';
 import { cleanupIdempotencyKeys } from './middleware/idempotency';
 
 async function main(): Promise<void> {
@@ -29,6 +30,7 @@ async function main(): Promise<void> {
   });
 
   startDepositWatcher();
+  startRateWatcher();
 
   // Ежечасная очистка просроченных ключей идемпотентности и сессий.
   const cleanupTimer = setInterval(
@@ -47,6 +49,7 @@ async function main(): Promise<void> {
   const shutdown = (signal: string): void => {
     logger.info('Получен сигнал завершения, останавливаем сервер', { signal });
     stopDepositWatcher();
+    stopRateWatcher();
     clearInterval(cleanupTimer);
     server.close(() => {
       void pool.end().finally(() => process.exit(0));

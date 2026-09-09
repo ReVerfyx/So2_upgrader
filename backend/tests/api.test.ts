@@ -289,6 +289,57 @@ describeIfDb('API Upgrader Standoff 2', () => {
       expect(after.body.balance.minor).toBe(before.body.balance.minor);
     });
 
+    it('блокирует пополнение, когда курс устарел и источники недоступны', async () => {
+      const { updateSetting, invalidateSettingsCache } = await import('../src/services/settingsService');
+      const { setRateProviders } = await import('../src/services/rateService');
+
+      // Все источники курса «недоступны», а сохранённый курс — суточной давности.
+      setRateProviders([
+        {
+          name: 'broken',
+          isConfigured: () => true,
+          fetchRate: async () => {
+            throw new Error('источник недоступен');
+          },
+        },
+      ]);
+      await updateSetting(
+        'rates',
+        {
+          minorPerTon: '35000',
+          marketRubPerTon: 350,
+          spreadPercent: 3,
+          auto: true,
+          maxAgeMinutes: 30,
+          source: 'coingecko',
+          updatedAt: new Date(Date.now() - 24 * 60 * 60_000).toISOString(),
+        },
+        null,
+      );
+      invalidateSettingsCache();
+
+      const response = await client.post('/api/deposit', { amount: '3' });
+      expect(response.status).toBe(503);
+      expect(response.body.error.code).toBe('RATE_UNAVAILABLE');
+
+      // Возвращаем тестовое окружение в исходное состояние.
+      setRateProviders(null);
+      await updateSetting(
+        'rates',
+        {
+          minorPerTon: '35000',
+          marketRubPerTon: null,
+          spreadPercent: 0,
+          auto: false,
+          maxAgeMinutes: 0,
+          source: 'manual',
+          updatedAt: null,
+        },
+        null,
+      );
+      invalidateSettingsCache();
+    });
+
     it('не зачисляет одну транзакцию дважды', async () => {
       const created = await client.post('/api/deposit', { amount: '4' });
       const paymentId = created.body.deposit.paymentId;

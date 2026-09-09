@@ -8,7 +8,8 @@ import { rateLimit } from '../middleware/rateLimit';
 import { idempotency } from '../middleware/idempotency';
 import { z } from 'zod';
 import { createDeposit, getDeposit, getWalletAddress, listDeposits } from '../services/depositService';
-import { getDepositSettings, getRateSettings } from '../services/settingsService';
+import { getDepositSettings } from '../services/settingsService';
+import { getRateInfo } from '../services/rateService';
 import { money, nanoToMinor, tonMoney } from '../lib/money';
 import { env } from '../config/env';
 
@@ -17,12 +18,13 @@ export const depositRouter = Router();
 depositRouter.get(
   '/deposit/info',
   asyncHandler(async (_req, res) => {
-    const [settings, rates] = await Promise.all([getDepositSettings(), getRateSettings()]);
+    const [settings, rateInfo] = await Promise.all([getDepositSettings(), getRateInfo()]);
+    const minorPerTon = BigInt(Math.round(Number(rateInfo.coinsPerTon) * 100));
     res.json({
       minDeposit: tonMoney(settings.minDepositNano),
-      minDepositCoins: money(nanoToMinor(settings.minDepositNano, rates.minorPerTon)),
-      coinsPerTon: (rates.minorPerTon / 100n).toString(),
-      rateSource: rates.source,
+      minDepositCoins: money(nanoToMinor(settings.minDepositNano, minorPerTon)),
+      coinsPerTon: rateInfo.coinsPerTon,
+      rate: rateInfo,
       ttlMinutes: settings.ttlMinutes,
       minConfirmations: settings.minConfirmations,
       payCurrency: 'TON',

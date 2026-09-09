@@ -14,6 +14,7 @@ import { coinAmountSchema, paged, paginationSchema, tonAmountSchema, uuidSchema 
 import { requireAdmin } from '../middleware/auth';
 import { rateLimit } from '../middleware/rateLimit';
 import { money } from '../lib/money';
+import { badRequest } from '../lib/errors';
 import {
   adjustBalance,
   getAdminStats,
@@ -36,7 +37,8 @@ import {
 } from '../services/withdrawalService';
 import { createItem, listItems, updateItem } from '../services/itemService';
 import { adminConfirmDeposit } from '../services/depositService';
-import { getAllSettings, updateSetting } from '../services/settingsService';
+import { getAllSettings, getRateSettings, updateSetting } from '../services/settingsService';
+import { getRateInfo, refreshRate } from '../services/rateService';
 import { runWatcherCycle } from '../workers/depositWatcher';
 
 export const adminRouter = Router();
@@ -480,36 +482,93 @@ adminRouter.put(
   }),
 );
 
-/** Курс обмена TON → монеты (1 монета = 1 рубль). */
+/**
+ * Курс обмена TON → монеты (1 монета = 1 рубль).
+ *
+ * auto = true  — курс берётся с биржевых источников и обновляется сам,
+ *                администратор задаёт только спред площадки;
+ * auto = false — действует курс, введённый вручную.
+ */
 adminRouter.put(
   '/settings/rates',
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(
       z.object({
-        coinsPerTon: z.number().min(1).max(1_000_000),
-        source: z.string().max(32).default('manual'),
+        auto: z.boolean(),
+        spreadPercent: z.number().min(0).max(50).default(0),
+        maxAgeMinutes: z.number().int().min(0).max(10_080).optional(),
+        coinsPerTon: z.number().min(1).max(1_000_000).optional(),
       }),
       req.body,
     );
 
+    if (!input.auto && input.coinsPerTon === undefined) {
+      throw badRequest('В ручном режиме нужно указать курс', 'MANUAL_RATE_REQUIRED');
+    }
+
+    const current = await getRateSettings();
+    const minorPerTon =
+      input.coinsPerTon !== undefined ? BigInt(Math.round(input.coinsPerTon * 100)) : current.minorPerTon;
+
     await updateSetting(
       'rates',
       {
-        minorPerTon: String(Math.round(input.coinsPerTon * 100)),
-        source: input.source,
+        minorPerTon: minorPerTon.toString(),
+        marketRubPerTon: current.marketRubPerTon,
+        spreadPercent: input.spreadPercent,
+        auto: input.auto,
+        maxAgeMinutes: input.maxAgeMinutes ?? current.maxAgeMinutes,
+        source: input.auto ? current.source : 'manual',
         updatedAt: new Date().toISOString(),
       },
       req.user!.id,
     );
+
+    // В автоматическом режиме сразу подтягиваем свежий курс с новым спредом.
+    const refreshed = input.auto ? await refreshRate({ force: true, adminId: req.user!.id }) : null;
+
     await logAdminAction({
       adminId: req.user!.id,
       action: 'settings.rates',
       targetType: 'settings',
       targetId: 'rates',
-      payload: { coinsPerTon: input.coinsPerTon },
+      payload: { ...input, refreshed: refreshed?.updated ?? false },
       ip: req.ip,
     });
-    res.json({ ok: true, settings: await getAllSettings() });
+
+    res.json({ ok: true, rate: await getRateInfo(), refreshFailures: refreshed?.failures ?? [] });
+  }),
+);
+
+/** Принудительное обновление курса с биржевых источников. */
+adminRouter.post(
+  '/settings/rates/refresh',
+  rateLimit({ name: 'admin-rate-refresh', windowMs: 60_000, max: 10 }),
+  asyncHandler(async (req, res) => {
+    const result = await refreshRate({ force: true, adminId: req.user!.id });
+    await logAdminAction({
+      adminId: req.user!.id,
+      action: 'settings.rates.refresh',
+      payload: { updated: result.updated, source: result.source, failures: result.failures },
+      ip: req.ip,
+    });
+
+    res.json({
+      updated: result.updated,
+      rate: await getRateInfo(),
+      failures: result.failures,
+      message: result.updated
+        ? `Курс обновлён из источника «${result.source}»`
+        : 'Ни один источник не ответил, действует прежний курс',
+    });
+  }),
+);
+
+/** Текущее состояние курса. */
+adminRouter.get(
+  '/settings/rates',
+  asyncHandler(async (_req, res) => {
+    res.json({ rate: await getRateInfo() });
   }),
 );
 

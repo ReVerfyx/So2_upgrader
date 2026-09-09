@@ -30,7 +30,7 @@ Telegram: [@stock2_shop](https://t.me/stock2_shop)
 | --- | --- |
 | Бэкенд | Node.js 20+, TypeScript, Express, PostgreSQL 16 (`pg`, без ORM), zod, bcryptjs |
 | Фронтенд | React 18, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query |
-| Тесты | Vitest + Supertest (66 тестов бэкенда, 14 фронтенда) |
+| Тесты | Vitest + Supertest (90 тестов бэкенда, 14 фронтенда) |
 | Инфраструктура | Docker Compose, nginx, GitHub Actions |
 
 Дизайн-система построена по референсу upgrader.vip — см. [docs/reference.md](docs/reference.md).
@@ -113,7 +113,19 @@ npm run dev:frontend
 Администратор по умолчанию: `ADMIN_USERNAME` / `ADMIN_PASSWORD` из `.env`
 (в разработке — `admin` / `admin12345`). **Обязательно смените в production.**
 
-### 5. Запуск через Docker
+### 5. Запуск в production одним процессом
+
+Бэкенд умеет сам раздавать собранный фронтенд — отдельный nginx не обязателен:
+
+```bash
+npm run build
+NODE_ENV=production SERVE_FRONTEND=true PORT=8080 npm run start --workspace backend
+```
+
+Сайт и API будут на одном адресе (`http://сервер:8080`), поэтому cookie
+остаются first-party. За обратным прокси с HTTPS оставьте `COOKIE_SECURE=true`.
+
+### 6. Запуск через Docker
 
 ```bash
 cp .env.example .env      # заполните POSTGRES_PASSWORD, SESSION_SECRET и др.
@@ -141,11 +153,35 @@ docker compose up -d --build
 | `TON_PROVIDER` | `toncenter` (в production `mock` запрещён кодом) |
 | `TON_API_KEY` | Ключ API провайдера блокчейна |
 
+### Курс TON → монеты
+
+Курс берётся с биржевых источников автоматически. Порядок опроса:
+**CoinGecko → tonapi.io → Binance + ЦБ РФ**; первый ответивший побеждает.
+К рыночному курсу применяется спред площадки. Курс фиксируется в момент
+создания счёта, поэтому его изменение не влияет на выставленные счета.
+
+Если ни один источник не ответил, продолжает действовать последний известный
+курс. Когда он устаревает сверх `RATE_MAX_AGE_MINUTES`, создание новых счетов
+блокируется с ошибкой `RATE_UNAVAILABLE` — лучше отказать, чем зачислить
+деньги по неверному курсу.
+
+| Переменная | По умолчанию | Описание |
+| --- | --- | --- |
+| `RATE_PROVIDERS` | `coingecko,tonapi,binance+cbr` | Источники в порядке приоритета |
+| `RATE_AUTO_UPDATE` | `true` | Автообновление курса |
+| `RATE_REFRESH_MINUTES` | `15` | Интервал обновления |
+| `RATE_MAX_AGE_MINUTES` | `180` | Возраст, после которого пополнение блокируется (0 — не проверять) |
+| `RATE_SPREAD_PERCENT` | `3` | Спред площадки к рыночному курсу |
+| `COIN_MINOR_PER_TON` | `35000` | Резервный курс в копейках, если источники недоступны |
+| `COINGECKO_API_KEY` | — | Ключ CoinGecko Pro (необязательно) |
+
+Всё это настраивается и в админ-панели («Коэффициенты» → «Курс TON → монеты»),
+там же кнопка **Обновить сейчас** и отображение источника со временем обновления.
+
 ### Экономика
 
 | Переменная | По умолчанию | Описание |
 | --- | --- | --- |
-| `COIN_MINOR_PER_TON` | `35000` | Копеек за 1 TON (35000 = 350 монет). Меняется и в админ-панели |
 | `MIN_DEPOSIT_TON` | `0.88` | Минимальная сумма пополнения |
 | `DEPOSIT_TTL_MINUTES` | `30` | Время жизни счёта |
 | `UPGRADE_HOUSE_EDGE` | `0.08` | Комиссия площадки (8%) |
@@ -169,6 +205,9 @@ docker compose up -d --build
 | Переменная | Описание |
 | --- | --- |
 | `TEST_MODE` | `true` включает `/api/dev/*`. В production принудительно отключается кодом |
+| `COOKIE_SECURE` | Флаг Secure у cookie сессии (по умолчанию включён в production). Отключайте только для http |
+| `SERVE_FRONTEND` | `true` — бэкенд сам раздаёт собранный фронтенд, отдельный nginx не нужен |
+| `FRONTEND_DIR` | Папка со сборкой фронтенда (по умолчанию `frontend/dist`) |
 | `ITEMS_IMAGE_BASE_URL` | Базовый адрес изображений предметов |
 | `VITE_BRAND_NAME`, `VITE_BRAND_TAGLINE`, `VITE_TELEGRAM_URL` | Настройки бренда фронтенда |
 
@@ -280,7 +319,9 @@ npm run items:import --workspace backend -- ./catalog.json --deactivate-missing
 | `POST` | `/api/admin/deposits/check` | Принудительная проверка блокчейна |
 | `GET/POST/PATCH` | `/api/admin/items` | Управление предметами |
 | `PUT` | `/api/admin/settings/upgrade` | Коэффициенты |
-| `PUT` | `/api/admin/settings/rates` | Курс TON → монеты |
+| `GET` | `/api/admin/settings/rates` | Состояние курса и источника |
+| `PUT` | `/api/admin/settings/rates` | Режим курса, спред, ручное значение |
+| `POST` | `/api/admin/settings/rates/refresh` | Обновить курс с источников немедленно |
 | `PUT` | `/api/admin/settings/deposit` | Параметры пополнения |
 | `GET` | `/api/admin/upgrades` | История всех игр |
 | `GET` | `/api/admin/logs` | Действия администраторов |
@@ -310,12 +351,30 @@ npm run migrate
 
 1. Создайте кошелёк (Tonkeeper, Tonhub) и укажите его адрес в
    `TON_WALLET_ADDRESS`. Приватный ключ на сервер **не передаётся** — приём
-   платежей работает только на чтение блокчейна.
-2. Получите ключ API на <https://toncenter.com/> и задайте `TON_API_KEY`,
-   `TON_PROVIDER=toncenter`.
+   платежей работает только на чтение блокчейна. Формат адреса проверяется
+   на старте: подойдут `UQ…`, `EQ…` и «сырой» `0:…`.
+2. Получите ключ API и укажите провайдера:
+   * <https://toncenter.com/> → `TON_PROVIDER=toncenter` (используется API v3
+     с автоматическим откатом на v2);
+   * <https://tonapi.io/> → `TON_PROVIDER=tonapi`.
+   Ключ кладётся в `TON_API_KEY`.
 3. Включите воркер: `TON_WATCHER_ENABLED=true`, интервал — `TON_POLL_INTERVAL_MS`.
 4. Проверьте: создайте счёт на сайте, отправьте перевод **с комментарием**
    (`SO2-XXXXXXXXXX`), баланс пополнится после подтверждения.
+
+### Что проверяет сервер перед зачислением
+
+* перевод адресован кошельку площадки (адреса сравниваются по содержимому,
+  а не как строки: `UQ…`, `EQ…` и `0:…` считаются одним кошельком);
+* транзакция успешна и не отклонена (`bounced`, `aborted` отбрасываются);
+* сумма больше нуля и покрывает счёт (допуск на комиссию сети — 0.5%);
+* комментарий содержит идентификатор счёта `SO2-XXXXXXXXXX`;
+* набрано нужное число подтверждений (`TON_MIN_CONFIRMATIONS`);
+* транзакция ещё не зачислялась — гарантируется уникальным индексом на
+  `deposits.tx_hash`.
+
+Ручная проверка блокчейна доступна в админ-панели («Пополнения» →
+«Проверить блокчейн»), там же ручное подтверждение нестандартного платежа.
 
 Другой провайдер подключается реализацией интерфейса `TonProvider`
 (`backend/src/ton/TonProvider.ts`) — бизнес-логику менять не нужно.
@@ -327,7 +386,7 @@ npm run migrate
 ```bash
 npm run typecheck    # TypeScript обоих пакетов
 npm run lint         # ESLint
-npm run test         # Vitest: 66 тестов бэкенда + 14 фронтенда
+npm run test         # Vitest: 90 тестов бэкенда + 14 фронтенда
 npm run build        # сборка backend и frontend
 ```
 

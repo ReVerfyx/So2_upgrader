@@ -32,6 +32,7 @@ export class MockTonProvider implements TonProvider {
       sender: params.sender ?? 'EQmock_sender_address_for_development_only',
       destination: params.destination,
       utime: Math.floor(Date.now() / 1000),
+      blockSeqno: null,
     };
     this.transactions.unshift(tx);
     this.transactions = this.transactions.slice(0, 200);

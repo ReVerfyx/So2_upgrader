@@ -19,6 +19,14 @@ export interface UpgradeSettingsFull extends UpgradeSettings {
 export interface RateSettings {
   /** Сколько копеек за 1 TON (35000 = 350 монет). */
   minorPerTon: bigint;
+  /** Рыночный курс без спреда, ₽ за TON. */
+  marketRubPerTon: number | null;
+  /** Спред площадки, %. */
+  spreadPercent: number;
+  /** Обновлять ли курс автоматически. */
+  auto: boolean;
+  /** Через сколько минут курс считается устаревшим (0 — не проверять). */
+  maxAgeMinutes: number;
   source: string;
   updatedAt: string | null;
 }
@@ -92,7 +100,12 @@ export async function getSiteSettings(db: Db = pool): Promise<SiteSettings> {
   return readSetting<SiteSettings>('site', { maintenance: false, announcement: '' }, db);
 }
 
-export async function updateSetting(key: string, value: unknown, adminId: string, db: Db = pool): Promise<void> {
+export async function updateSetting(
+  key: string,
+  value: unknown,
+  adminId: string | null,
+  db: Db = pool,
+): Promise<void> {
   await query(
     `INSERT INTO app_settings (key, value, updated_by)
      VALUES ($1, $2::jsonb, $3)
@@ -111,14 +124,31 @@ export async function getAllSettings(db: Db = pool): Promise<Record<string, unkn
 
 /** Курс обмена TON → монеты (по умолчанию берётся из переменных окружения). */
 export async function getRateSettings(db: Db = pool): Promise<RateSettings> {
-  const fallback = { minorPerTon: String(env.economy.minorPerTon), source: 'env', updatedAt: null };
-  const stored = await readSetting<{ minorPerTon?: string | number; source?: string; updatedAt?: string | null }>(
-    'rates',
-    fallback,
-    db,
-  );
+  const fallback = {
+    minorPerTon: String(env.economy.minorPerTon),
+    marketRubPerTon: null,
+    spreadPercent: env.rates.spreadPercent,
+    auto: env.rates.auto,
+    maxAgeMinutes: env.rates.maxAgeMinutes,
+    source: 'env',
+    updatedAt: null,
+  };
+  const stored = await readSetting<{
+    minorPerTon?: string | number;
+    marketRubPerTon?: number | null;
+    spreadPercent?: number;
+    auto?: boolean;
+    maxAgeMinutes?: number;
+    source?: string;
+    updatedAt?: string | null;
+  }>('rates', fallback, db);
+
   return {
     minorPerTon: BigInt(stored.minorPerTon ?? fallback.minorPerTon),
+    marketRubPerTon: stored.marketRubPerTon ?? null,
+    spreadPercent: stored.spreadPercent ?? fallback.spreadPercent,
+    auto: stored.auto ?? fallback.auto,
+    maxAgeMinutes: stored.maxAgeMinutes ?? fallback.maxAgeMinutes,
     source: stored.source ?? 'manual',
     updatedAt: stored.updatedAt ?? null,
   };

@@ -326,3 +326,15 @@ export interface ErrorLog {
   user_id: string | null;
   created_at: string;
 }
+
+/** Состояние курса TON → монеты. */
+export interface RateInfo {
+  coinsPerTon: string;
+  marketRubPerTon: number | null;
+  spreadPercent: number;
+  auto: boolean;
+  source: string;
+  updatedAt: string | null;
+  ageMinutes: number | null;
+  stale: boolean;
+}

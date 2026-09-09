@@ -21,6 +21,8 @@ export interface TonIncomingTransaction {
   utime: number;
   /** Логическое время — для корректной сортировки внутри блока. */
   lt: string;
+  /** Номер мастерчейн-блока, если известен (для подсчёта подтверждений). */
+  blockSeqno?: number | null;
 }
 
 export interface FetchTransactionsParams {

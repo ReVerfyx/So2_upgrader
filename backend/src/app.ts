@@ -1,9 +1,12 @@
 /** Сборка Express-приложения: middleware безопасности и все маршруты. */
+import path from 'node:path';
+import fs from 'node:fs';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
+import { logger } from './lib/logger';
 import { requestId } from './middleware/requestId';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { attachUser } from './middleware/auth';
@@ -79,6 +82,36 @@ export function createApp(): Express {
   }
 
   app.use('/api', api);
+
+  // Раздача собранного фронтенда тем же процессом.
+  // Удобно для развёртывания одним контейнером без отдельного nginx.
+  if (env.frontend.serve) {
+    const distDir = env.frontend.dir
+      ? path.resolve(env.frontend.dir)
+      : path.resolve(__dirname, '..', '..', 'frontend', 'dist');
+
+    if (fs.existsSync(distDir)) {
+      app.use(
+        express.static(distDir, {
+          index: false,
+          maxAge: '1h',
+          setHeaders: (res, filePath) => {
+            // Файлы сборки содержат хеш в имени — их можно кэшировать надолго.
+            if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            }
+          },
+        }),
+      );
+
+      // Маршрутизация SPA: любой не-API путь отдаёт index.html.
+      app.get(/^(?!\/api).*/, (_req, res) => {
+        res.sendFile(path.join(distDir, 'index.html'));
+      });
+    } else {
+      logger.warn('Папка сборки фронтенда не найдена, статика не раздаётся', { distDir });
+    }
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,0 +1,28 @@
+{
+  "_comment": "ДЕМО-СТОК. Замените на свой реальный ассортимент. Поле img — путь к картинке (assets/img/skins/...), если пусто, рисуется плашка с названием оружия.",
+  "rarities": {
+    "common": { "title": "Обычный",     "color": "#6b7280" },
+    "rare":   { "title": "Редкий",      "color": "#3b82f6" },
+    "epic":   { "title": "Эпический",   "color": "#a855f7" },
+    "legend": { "title": "Легендарный", "color": "#f97316" },
+    "arcane": { "title": "Арканный",    "color": "#fbd506" }
+  },
+  "items": [
+    { "id": "s-akr-ember",     "name": "Уголёк",        "weapon": "AKR",          "rarity": "legend", "priceRub": 2490, "stock": 3, "img": "" },
+    { "id": "s-akr-frost",     "name": "Мерзлота",      "weapon": "AKR",          "rarity": "epic",   "priceRub": 890,  "stock": 7, "img": "" },
+    { "id": "s-m4-neon",       "name": "Неон",          "weapon": "M4",           "rarity": "epic",   "priceRub": 1190, "stock": 4, "img": "" },
+    { "id": "s-m4-sandstorm",  "name": "Песчаная буря", "weapon": "M4",           "rarity": "rare",   "priceRub": 320,  "stock": 12, "img": "" },
+    { "id": "s-awm-eclipse",   "name": "Затмение",      "weapon": "AWM",          "rarity": "arcane", "priceRub": 7900, "stock": 1, "img": "" },
+    { "id": "s-awm-carbon",    "name": "Карбон",        "weapon": "AWM",          "rarity": "rare",   "priceRub": 450,  "stock": 9, "img": "" },
+    { "id": "s-usp-venom",     "name": "Яд",            "weapon": "USP",          "rarity": "epic",   "priceRub": 690,  "stock": 6, "img": "" },
+    { "id": "s-glock-graffiti","name": "Граффити",      "weapon": "Glock",        "rarity": "rare",   "priceRub": 240,  "stock": 15, "img": "" },
+    { "id": "s-deagle-gold",   "name": "Золотой век",   "weapon": "Desert Eagle", "rarity": "legend", "priceRub": 3290, "stock": 2, "img": "" },
+    { "id": "s-kara-glacier",  "name": "Ледник",        "weapon": "Керамбит",     "rarity": "arcane", "priceRub": 12900,"stock": 1, "img": "" },
+    { "id": "s-kara-rust",     "name": "Ржавчина",      "weapon": "Керамбит",     "rarity": "legend", "priceRub": 4590, "stock": 2, "img": "" },
+    { "id": "s-butterfly-sky", "name": "Небосвод",      "weapon": "Бабочка",      "rarity": "legend", "priceRub": 5290, "stock": 1, "img": "" },
+    { "id": "s-mp7-circuit",   "name": "Микросхема",    "weapon": "MP7",          "rarity": "rare",   "priceRub": 190,  "stock": 20, "img": "" },
+    { "id": "s-p350-tiger",    "name": "Тигр",          "weapon": "P350",         "rarity": "epic",   "priceRub": 540,  "stock": 5, "img": "" },
+    { "id": "s-scar-ghost",    "name": "Призрак",       "weapon": "SCAR",         "rarity": "epic",   "priceRub": 980,  "stock": 3, "img": "" },
+    { "id": "s-gloves-tech",   "name": "Техно",         "weapon": "Перчатки",     "rarity": "legend", "priceRub": 3990, "stock": 2, "img": "" }
+  ]
+}

@@ -1,0 +1,117 @@
+<!--
+{
+  "title": "Оплата заказа — {{brand}}",
+  "description": "Реквизиты для оплаты заказа в TON: адрес, сумма и комментарий. Статус платежа обновляется автоматически.",
+  "noindex": true,
+  "headExtra": "<meta name=\"robots\" content=\"noindex,nofollow\">\n<script src=\"https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js\" defer></script>",
+  "scripts": ["ton.js", "checkout.js"]
+}
+-->
+<section class="page-head" id="checkout">
+  <div class="wrap">
+    <p class="breadcrumbs"><a href="index.html">Главная</a> / <a href="orders.html">Заказы</a> / Оплата</p>
+
+    <div id="co-notfound" hidden>
+      <h1>Заказ не найден</h1>
+      <p>Ссылка устарела или заказ создавался в другом браузере. Заказы хранятся локально,
+        поэтому в режиме инкогнито и после очистки данных сайта они пропадают.</p>
+      <div class="hero-cta mt-16">
+        <a class="btn btn-primary" href="gold.html">Собрать заказ заново</a>
+        <a class="btn btn-ghost" href="{{contacts.telegram}}" target="_blank" rel="noopener">Написать оператору</a>
+      </div>
+    </div>
+
+    <div id="co-body" hidden>
+      <h1>Оплата заказа <span class="accent" id="co-order-id">—</span></h1>
+      <p><span class="status-pill" id="co-status" data-status="wait">Ожидаем оплату</span></p>
+      <p class="muted" id="co-status-hint">
+        Отправьте точную сумму на адрес ниже и обязательно укажите комментарий к переводу —
+        по нему платёж находится автоматически.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap pay-grid">
+    <div>
+      <div class="panel" id="co-payblock">
+        <h3>Реквизиты перевода</h3>
+
+        <div class="pay-row">
+          <div>
+            <div class="pay-label">Сумма</div>
+            <div class="pay-value big accent" id="co-amount-ton">—</div>
+            <div class="tiny dim" id="co-amount-rub"></div>
+          </div>
+          <button class="copy-btn" id="co-copy-amount" data-copy="">Копировать</button>
+        </div>
+
+        <div class="pay-row">
+          <div style="min-width:0">
+            <div class="pay-label">Адрес кошелька (TON)</div>
+            <div class="pay-value" id="co-address">—</div>
+          </div>
+          <button class="copy-btn" id="co-copy-address" data-copy="">Копировать</button>
+        </div>
+
+        <div class="pay-row" style="border-color:rgba(251,213,6,.4)">
+          <div>
+            <div class="pay-label accent">Комментарий к переводу — обязательно</div>
+            <div class="pay-value big" id="co-comment">—</div>
+          </div>
+          <button class="copy-btn" id="co-copy-comment" data-copy="">Копировать</button>
+        </div>
+
+        <div class="notice notice--warn mt-16">
+          <span class="notice-ico" aria-hidden="true">!</span>
+          <span>Перевод <b>без комментария</b> не опознается автоматически. Если забыли —
+            не переживайте: напишите номер заказа и хеш транзакции оператору, найдём вручную.</span>
+        </div>
+
+        <div class="hero-cta mt-24">
+          <a class="btn btn-primary" id="co-pay-link" href="#">Оплатить в кошельке</a>
+          <a class="btn btn-ghost" id="co-pay-tonkeeper" href="#" target="_blank" rel="noopener">Tonkeeper</a>
+          <a class="btn btn-ghost" id="co-pay-tonhub" href="#" target="_blank" rel="noopener">Tonhub</a>
+        </div>
+
+        <div class="hero-cta mt-16">
+          <button class="btn btn-outline" id="co-check" type="button">Я оплатил — проверить</button>
+          <span class="timer" id="co-timer"></span>
+        </div>
+      </div>
+
+      <div class="panel notice--ok" id="co-paid" hidden style="border-color:rgba(79,211,95,.35)">
+        <h3 class="green">Оплата получена</h3>
+        <p class="muted">
+          Платёж найден в блокчейне и привязан к вашему заказу. Оператор свяжется с вами по указанному контакту
+          в течение {{deliveryEta}} (рабочее время — {{workHours}}).
+        </p>
+        <p class="muted small">Чтобы ускорить выдачу, напишите оператору сами — номер заказа уже подставлен в сообщение.</p>
+        <a class="btn btn-primary" id="co-telegram" href="{{contacts.telegram}}" target="_blank" rel="noopener">Написать оператору</a>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <div class="qr-box" id="co-qr" aria-label="QR-код для оплаты"></div>
+        <p class="tiny dim center">Отсканируйте кошельком — сумма и комментарий подставятся сами</p>
+
+        <h4 class="mt-24">Состав заказа</h4>
+        <div id="co-items"></div>
+        <div class="summary-row summary-row--total"><span>Итого</span><span id="co-total-rub"></span></div>
+
+        <h4 class="mt-24">Данные для выдачи</h4>
+        <div class="summary-row"><span>Ник</span><span id="co-nickname"></span></div>
+        <div class="summary-row"><span>ID игрока</span><span id="co-playerid"></span></div>
+        <div class="summary-row"><span>Контакт</span><span id="co-contact"></span></div>
+        <div class="summary-row"><span>Курс заказа</span><span id="co-rate"></span></div>
+
+        <p class="field-hint mt-16">
+          Заказ сохранён в этом браузере — вернуться к нему можно на странице
+          <a class="accent" href="orders.html">«Заказы»</a>.
+        </p>
+      </div>
+    </aside>
+  </div>
+</section>

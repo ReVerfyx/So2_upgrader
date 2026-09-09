@@ -1,0 +1,210 @@
+<!--
+{
+  "title": "Купить голду и скины Standoff 2 за криптовалюту — {{brand}}",
+  "description": "Голда и скины Standoff 2 по фиксированной цене. Оплата TON от 50 ₽, зачисление за 5–30 минут. Без рулеток и ставок — обычный магазин.",
+  "priority": "1.0",
+  "scripts": ["catalog.js"]
+}
+-->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Standoff 2 · оплата TON</span>
+      <h1>Голда и скины <span>без переплат</span> и без лотерей</h1>
+      <p class="hero-lead">
+        Выбираете пакет — платите криптой — получаете зачисление на аккаунт.
+        Фиксированная цена, никаких «шансов» и «апгрейдов на удачу»:
+        сколько оплатили, столько и придёт.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="gold.html">Купить голду</a>
+        <a class="btn btn-ghost btn-lg" href="skins.html">Смотреть скины</a>
+      </div>
+      <div class="hero-stats">
+        <div><b>от 50 ₽</b><span>минимальный заказ</span></div>
+        <div><b>{{deliveryEta}}</b><span>среднее время выдачи</span></div>
+        <div><b>TON</b><span>приём оплаты 24/7</span></div>
+      </div>
+    </div>
+
+    <aside class="hero-card">
+      <h3>Калькулятор голды</h3>
+      <label class="field" for="calc-input">
+        <span>Сумма в рублях</span>
+        <input class="input" id="calc-input" type="number" inputmode="numeric" min="50" step="10" value="500" placeholder="500">
+      </label>
+      <p class="field-error" id="calc-error" hidden>Минимальная сумма заказа — 50 ₽</p>
+
+      <div class="calc-presets">
+        <button type="button" class="chip" data-calc-preset="100">100 ₽</button>
+        <button type="button" class="chip" data-calc-preset="500">500 ₽</button>
+        <button type="button" class="chip" data-calc-preset="1000">1 000 ₽</button>
+        <button type="button" class="chip" data-calc-preset="3000">3 000 ₽</button>
+      </div>
+
+      <div class="calc-out">
+        <span class="muted small">Получите голды</span>
+        <b class="accent" id="calc-gold">694</b>
+      </div>
+      <div class="calc-out">
+        <span class="muted small">К оплате в TON</span>
+        <b id="calc-ton">—</b>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="calc-add">Добавить в корзину</button>
+      <p class="field-hint mt-16">
+        Курс тянется с биржи в реальном времени и фиксируется на час после оформления заказа.
+      </p>
+    </aside>
+  </div>
+</section>
+
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">
+    <span>Оплата <b>TON</b> · минимум 50 ₽</span>
+    <span>Выдача <b>{{deliveryEta}}</b></span>
+    <span>Поддержка <b>{{workHours}}</b></span>
+    <span>Передача <b>скинов и голды</b></span>
+    <span>Выкуп предметов <b>за TON</b></span>
+    <span>Это <b>не казино</b>: фиксированная цена</span>
+    <span>Оплата <b>TON</b> · минимум 50 ₽</span>
+    <span>Выдача <b>{{deliveryEta}}</b></span>
+    <span>Поддержка <b>{{workHours}}</b></span>
+    <span>Передача <b>скинов и голды</b></span>
+    <span>Выкуп предметов <b>за TON</b></span>
+    <span>Это <b>не казино</b>: фиксированная цена</span>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <h2>Пакеты голды</h2>
+        <p>Чем больше пакет — тем больше бонусной голды сверху. Цена в TON пересчитывается по текущему курсу.</p>
+      </div>
+      <a class="btn btn-outline" href="gold.html">Все пакеты</a>
+    </div>
+    <div class="grid grid-gold" data-gold-grid data-limit="4"></div>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <h2>Скины в наличии</h2>
+        <p>Передача происходит внутриигровым обменом. Нет нужного предмета — привезём под заказ.</p>
+      </div>
+      <a class="btn btn-outline" href="skins.html">Весь каталог</a>
+    </div>
+    <div class="grid grid-skins" data-skins-grid data-no-filter data-limit="4"></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head"><div><h2>Как это работает</h2>
+      <p>Четыре шага, никакой регистрации — заказ опознаётся по номеру, который вы указываете в комментарии к переводу.</p></div></div>
+    <div class="steps">
+      <article class="step">
+        <h3>Собираете заказ</h3>
+        <p>Пакет голды, произвольная сумма или скины из каталога — всё складывается в одну корзину.</p>
+      </article>
+      <article class="step">
+        <h3>Указываете ник и ID</h3>
+        <p>ID игрока виден в профиле Standoff 2. Он нужен, чтобы выдать покупку именно вам.</p>
+      </article>
+      <article class="step">
+        <h3>Платите в TON</h3>
+        <p>Кнопка открывает кошелёк с готовой суммой и комментарием. Комментарий — это номер заказа.</p>
+      </article>
+      <article class="step">
+        <h3>Получаете покупку</h3>
+        <p>Сайт сам видит платёж в блокчейне, оператор связывается с вами и выдаёт голду или скины.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <div class="grid grid-4">
+      <article class="feature">
+        <div class="feature-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3 4 6.5v5c0 4.6 3.2 8.3 8 9.5 4.8-1.2 8-4.9 8-9.5v-5L12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m8.6 12 2.4 2.4 4.4-4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Фиксированная цена</h3>
+        <p>Никаких ставок, кейсов и «шансов апгрейда». Вы платите за конкретный товар и получаете именно его.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5.2l3.4 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Быстрая выдача</h3>
+        <p>Обычно {{deliveryEta}} после подтверждения перевода. Ночью — с утра, как только оператор на месте.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7.5 12 4l8 3.5-8 3.5-8-3.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m4 12 8 3.5L20 12M4 16.5 12 20l8-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Прозрачная оплата</h3>
+        <p>Платёж виден в блокчейне TON. Сайт сам находит его по номеру заказа и показывает статус.</p>
+      </article>
+      <article class="feature">
+        <div class="feature-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 12a8 8 0 1 1-3.2-6.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Выкуп предметов</h3>
+        <p>Продаёте скины или голду — оценим и выплатим в TON на ваш кошелёк.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="panel panel--pad-lg" style="display:grid;grid-template-columns:1.3fr .7fr;gap:28px;align-items:center">
+      <div>
+        <h2 style="margin-bottom:10px">Продать скины или голду</h2>
+        <p class="muted mb-0">
+          Оценка бесплатная: опишите предмет, получите цену и выплату в TON.
+          Заявка формируется на сайте и уходит оператору одним сообщением.
+        </p>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end">
+        <a class="btn btn-primary" href="sell.html">Оставить заявку</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section--tight">
+  <div class="wrap">
+    <div class="section-head"><div><h2>Частые вопросы</h2>
+      <p>Короткие ответы. Полный список — на странице <a class="accent" href="faq.html">FAQ</a>.</p></div></div>
+
+    <details class="faq-item">
+      <summary>Это казино или рулетка?</summary>
+      <div class="faq-body"><p>Нет. На сайте нет ставок, кейсов, рулеток и механик «апгрейда с шансом».
+        Это магазин: у каждого товара фиксированная цена, вы получаете ровно то, что оплатили.
+        Слово «upgrader» в названии — про прокачку аккаунта, а не про игру на удачу.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>Почему оплата именно в TON?</summary>
+      <div class="faq-body"><p>Перевод приходит за секунды, комиссия сети — копейки, а платёж можно
+        проверить публично. Минимальный заказ — 50 ₽; минимальная сумма перевода в сети — {{ton.minTon}} TON.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>Что будет, если я забуду комментарий к переводу?</summary>
+      <div class="faq-body"><p>Платёж придёт, но автоматически не опознается. Напишите оператору
+        в <a href="{{contacts.telegram}}" target="_blank" rel="noopener">{{contacts.telegramName}}</a>,
+        приложите хеш транзакции — заказ найдут вручную.</p></div>
+    </details>
+    <details class="faq-item">
+      <summary>Как быстро приходит голда?</summary>
+      <div class="faq-body"><p>Обычно {{deliveryEta}} после подтверждения перевода. Поддержка работает {{workHours}};
+        заказы, оплаченные ночью, выдаются утром.</p></div>
+    </details>
+  </div>
+</section>

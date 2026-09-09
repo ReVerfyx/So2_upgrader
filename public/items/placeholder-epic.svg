@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" role="img" aria-label="Заглушка предмета">
+  <defs>
+    <linearGradient id="bg-epic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a259ff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#6a1fd0" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="fg-epic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a259ff"/>
+      <stop offset="100%" stop-color="#6a1fd0"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="240" rx="18" fill="#0f131c"/>
+  <rect width="320" height="240" rx="18" fill="url(#bg-epic)"/>
+  <g opacity="0.9">
+    <path d="M52 148 L128 92 L268 92 L268 116 L168 116 L152 148 Z" fill="url(#fg-epic)" opacity="0.85"/>
+    <rect x="92" y="148" width="58" height="16" rx="6" fill="url(#fg-epic)" opacity="0.6"/>
+    <circle cx="238" cy="104" r="6" fill="#0f131c" opacity="0.6"/>
+  </g>
+  <text x="160" y="200" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700"
+        fill="#a259ff" text-anchor="middle" letter-spacing="2">ЭПИЧЕСКОЕ</text>
+</svg>

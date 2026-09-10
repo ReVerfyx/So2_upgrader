@@ -306,7 +306,8 @@ adminRouter.post(
   '/deposits/check',
   rateLimit({ name: 'admin-watcher', windowMs: 60_000, max: 10 }),
   asyncHandler(async (req, res) => {
-    const stats = await runWatcherCycle();
+    // Администратор запускает проверку вручную — выполняем безусловно
+    const stats = await runWatcherCycle({ force: true });
     await logAdminAction({ adminId: req.user!.id, action: 'deposit.manual_check', payload: { ...stats }, ip: req.ip });
     res.json({ stats });
   }),

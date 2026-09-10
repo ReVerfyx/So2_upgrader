@@ -106,6 +106,53 @@ function mapDeposit(row: DepositRow, minorPerTon: bigint): DepositDto {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/*            Горизонт активных счетов: экономия обращений к базе              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Время, до которого существует хотя бы один неоплаченный счёт.
+ *
+ * Нужно, чтобы фоновый воркер не опрашивал блокчейн и не будил базу,
+ * когда ждать нечего. Это критично для бесплатных serverless-баз
+ * (Neon, Supabase), где тарифицируется время активности.
+ */
+let pendingHorizonMs = 0;
+
+/** Отмечает, что появился счёт, ожидающий оплаты. */
+export function notePendingDeposit(expiresAt: Date): void {
+  pendingHorizonMs = Math.max(pendingHorizonMs, expiresAt.getTime());
+}
+
+/** Есть ли смысл проверять блокчейн прямо сейчас. */
+export function hasPendingDeposits(): boolean {
+  return Date.now() < pendingHorizonMs;
+}
+
+/** Когда истечёт последний ожидающий счёт (0 — таких нет). */
+export function getPendingHorizon(): number {
+  return pendingHorizonMs;
+}
+
+/**
+ * Считывает горизонт из базы. Вызывается один раз при старте воркера:
+ * после перезапуска сервиса память пуста, а неоплаченные счета могут быть.
+ */
+export async function refreshPendingHorizon(db: Db = pool): Promise<number> {
+  const row = await queryOne<{ latest: string | null }>(
+    `SELECT max(expires_at)::text AS latest FROM deposits WHERE status = 'pending'`,
+    [],
+    db,
+  );
+  pendingHorizonMs = row?.latest ? new Date(row.latest).getTime() : 0;
+  return pendingHorizonMs;
+}
+
+/** Сброс состояния (используется в тестах). */
+export function resetPendingHorizon(): void {
+  pendingHorizonMs = 0;
+}
+
 /** Ссылка для кошельков TON (Tonkeeper, Tonhub и др.). */
 export function buildPaymentUrl(address: string, amountNano: bigint, comment: string): string {
   const url = new URL(`ton://transfer/${address}`);
@@ -186,6 +233,9 @@ export async function createDeposit(params: { userId: string; amountNano: bigint
         rates.minorPerTon.toString(),
       ],
     );
+    // Сообщаем воркеру, что появился счёт: до этого момента опрос нужен.
+    notePendingDeposit(expiresAt);
+
     return withQrCode(mapDeposit(row!, rates.minorPerTon));
   }
 

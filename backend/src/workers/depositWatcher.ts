@@ -9,7 +9,12 @@
 import { env } from '../config/env';
 import { logger } from '../lib/logger';
 import { getTonProvider } from '../ton';
-import { creditTransaction, expireStaleDeposits } from '../services/depositService';
+import {
+  creditTransaction,
+  expireStaleDeposits,
+  hasPendingDeposits,
+  refreshPendingHorizon,
+} from '../services/depositService';
 
 let timer: NodeJS.Timeout | null = null;
 let running = false;
@@ -23,8 +28,16 @@ export interface WatcherStats {
 }
 
 /** Один цикл проверки. Вынесен отдельно, чтобы вызывать из тестов и админки. */
-export async function runWatcherCycle(): Promise<WatcherStats> {
+export async function runWatcherCycle(options: { force?: boolean } = {}): Promise<WatcherStats> {
   const stats: WatcherStats = { checked: 0, credited: 0, expired: 0, errors: 0 };
+
+  // Пока нет неоплаченных счетов, ходить в базу и в блокчейн незачем.
+  // Это экономит время работы serverless-базы, которое тарифицируется
+  // (Neon, Supabase и подобные засыпают при простое).
+  if (!options.force && !hasPendingDeposits()) {
+    logger.debug('Активных счетов нет, цикл проверки пропущен');
+    return stats;
+  }
 
   try {
     stats.expired = await expireStaleDeposits();
@@ -97,15 +110,31 @@ export function startDepositWatcher(): void {
     }
   };
 
-  timer = setInterval(() => void tick(), env.ton.pollIntervalMs);
-  timer.unref?.();
-  logger.info('Воркер проверки пополнений запущен', { intervalMs: env.ton.pollIntervalMs });
-  void tick();
+  // Интервал опроса подстраивается под наличие счетов: часто — когда есть
+  // что ждать, редко — когда нет. Так база не будится впустую.
+  const scheduleNext = (): void => {
+    const interval = hasPendingDeposits() ? env.ton.pollIntervalMs : env.ton.idlePollIntervalMs;
+    timer = setTimeout(() => {
+      void tick().finally(scheduleNext);
+    }, interval);
+    timer.unref?.();
+  };
+
+  logger.info('Воркер проверки пополнений запущен', {
+    интервалАктивный: env.ton.pollIntervalMs,
+    интервалПростоя: env.ton.idlePollIntervalMs,
+  });
+
+  // При старте выясняем, остались ли неоплаченные счета с прошлого запуска.
+  void refreshPendingHorizon()
+    .catch((error: Error) => logger.warn('Не удалось прочитать активные счета', { error: error.message }))
+    .then(() => tick())
+    .finally(scheduleNext);
 }
 
 export function stopDepositWatcher(): void {
   if (timer) {
-    clearInterval(timer);
+    clearTimeout(timer);
     timer = null;
   }
 }

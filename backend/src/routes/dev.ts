@@ -167,7 +167,8 @@ devRouter.post(
       destination: deposit.wallet_address,
     });
 
-    const stats = await runWatcherCycle();
+    // force: имитация платежа должна срабатывать сразу, не дожидаясь цикла
+    const stats = await runWatcherCycle({ force: true });
     res.json({ transactionHash: tx.hash, stats });
   }),
 );

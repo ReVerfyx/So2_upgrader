@@ -73,6 +73,9 @@ services:
         value: 'true'
       - key: TON_POLL_INTERVAL_MS
         value: '30000'
+      # Пауза, когда неоплаченных счетов нет: экономит время работы базы
+      - key: TON_IDLE_POLL_INTERVAL_MS
+        value: '900000'
 
       # --- Курс TON → монеты ----------------------------------------------
       - key: RATE_AUTO_UPDATE

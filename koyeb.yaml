@@ -1,0 +1,81 @@
+# ВНИМАНИЕ (сентябрь 2026): Koyeb перешёл к Mistral AI, бесплатный тариф
+# Starter закрыт для новых аккаунтов. Файл оставлен для тех, у кого учётная
+# запись Koyeb уже была. Новым пользователям — Northflank или Render,
+# см. docs/ЗАПУСК.md.
+# ============================================================================
+#  Развёртывание STOCK2 на Koyeb (бесплатный тариф).
+#
+#  Koyeb даёт бесплатный веб-сервис (1 vCPU, 512 МБ) и бесплатный PostgreSQL
+#  со «сном» при простое — этого хватает для запуска площадки.
+#
+#  Через панель: Create Service → GitHub → выбрать репозиторий →
+#  Builder: Dockerfile → порт 8080 → добавить переменные ниже.
+#
+#  Через CLI:
+#    koyeb app init stock2 --docker-build-context . --git github.com/ВАШ/РЕПО
+#    koyeb service create stock2 --app stock2 --definition koyeb.yaml
+# ============================================================================
+name: stock2
+
+services:
+  - name: web
+    instance_type: free
+    regions:
+      - fra
+    ports:
+      - port: 8080
+        protocol: http
+    routes:
+      - path: /
+        port: 8080
+    health_checks:
+      - http:
+          path: /api/health
+          port: 8080
+
+    git:
+      branch: main
+      builder: docker
+      dockerfile: Dockerfile
+
+    env:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '8080'
+      - key: SERVE_FRONTEND
+        value: 'true'
+      - key: TRUST_PROXY
+        value: '1'
+      - key: SEED_ON_START
+        value: 'true'
+      - key: TEST_MODE
+        value: 'false'
+      - key: DATABASE_SSL
+        value: 'true'
+      - key: TON_PROVIDER
+        value: toncenter
+      - key: TON_API_BASE_URL
+        value: https://toncenter.com
+      - key: TON_WATCHER_ENABLED
+        value: 'true'
+      - key: RATE_AUTO_UPDATE
+        value: 'true'
+      - key: RATE_SPREAD_PERCENT
+        value: '3'
+
+      # Секреты создаются командой koyeb secret create <имя>
+      - key: DATABASE_URL
+        secret: stock2-database-url
+      - key: SESSION_SECRET
+        secret: stock2-session-secret
+      - key: ADMIN_SECRET
+        secret: stock2-admin-secret
+      - key: ADMIN_PASSWORD
+        secret: stock2-admin-password
+      - key: TON_WALLET_ADDRESS
+        secret: stock2-ton-wallet
+      - key: TON_API_KEY
+        secret: stock2-ton-api-key
+      - key: APP_URL
+        secret: stock2-app-url

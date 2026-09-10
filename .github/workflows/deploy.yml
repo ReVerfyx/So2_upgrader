@@ -1,0 +1,74 @@
+name: Deploy
+
+# Развёртывание на собственный сервер по SSH.
+# Все параметры берутся из GitHub Secrets — в репозитории ключей нет.
+#
+# Необходимые секреты (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST       — адрес сервера
+#   DEPLOY_USER       — пользователь SSH
+#   DEPLOY_SSH_KEY    — приватный ключ SSH
+#   DEPLOY_PATH       — путь к проекту на сервере (например, /srv/stock2)
+#   DEPLOY_PORT       — порт SSH (необязательно, по умолчанию 22)
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ветка или тег для развёртывания
+        required: false
+        default: main
+  push:
+    tags: ['v*']
+
+jobs:
+  deploy:
+    name: Развёртывание на сервер
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Проверка наличия секретов
+        run: |
+          if [ -z "${{ secrets.DEPLOY_HOST }}" ]; then
+            echo "::error::Не задан секрет DEPLOY_HOST. Добавьте секреты развёртывания в настройках репозитория."
+            exit 1
+          fi
+
+      - name: Настройка SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT || 22 }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Обновление и перезапуск на сервере
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.DEPLOY_PORT || 22 }}" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<'REMOTE'
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git fetch --all
+            git checkout "${{ github.event.inputs.ref || github.ref_name }}"
+            git pull --ff-only
+            docker compose pull || true
+            docker compose up -d --build
+            # Миграции применяются самим приложением при старте,
+            # но выполняем явно, чтобы упасть до перезапуска трафика.
+            docker compose exec -T backend node backend/dist/db/migrate.js
+            docker compose ps
+          REMOTE
+
+      - name: Проверка доступности
+        run: |
+          sleep 10
+          curl -fsS "${{ secrets.HEALTHCHECK_URL || format('https://{0}/api/health', secrets.DEPLOY_HOST) }}" || {
+            echo "::warning::Проверка health не прошла — проверьте логи сервера"
+          }
+
+      - name: Удаление ключа
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

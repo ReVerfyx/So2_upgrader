@@ -1,0 +1,172 @@
+name: Каталог скинов
+
+# Сборка каталога предметов из открытых источников.
+# В GitHub Actions есть доступ в интернет, поэтому скрапер работает здесь,
+# а результат сохраняется артефактом и (по желанию) коммитится в репозиторий.
+on:
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Файл со списком источников'
+        required: false
+        default: 'database/sources.json'
+      urls:
+        description: 'Адреса через запятую (переопределяют файл источников)'
+        required: false
+        default: ''
+      pages:
+        description: 'Диапазон страниц пагинации, например 1-10 (в URL нужен {page})'
+        required: false
+        default: ''
+      limit:
+        description: 'Максимум предметов'
+        required: false
+        default: '5000'
+      price_multiplier:
+        description: 'Множитель цены, если на сайте не рубли'
+        required: false
+        default: '1'
+      fallback_generate:
+        description: 'Если ничего не нашлось — сгенерировать из справочника оружия'
+        type: boolean
+        required: false
+        default: true
+      commit:
+        description: 'Закоммитить каталог в database/catalog.json'
+        type: boolean
+        required: false
+        default: false
+      ignore_robots:
+        description: 'Игнорировать robots.txt (только если есть разрешение владельца сайта)'
+        type: boolean
+        required: false
+        default: false
+
+  # Еженедельное обновление цен: воскресенье, 03:00 UTC
+  schedule:
+    - cron: '0 3 * * 0'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Сборка каталога
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Установка Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Разведка источников
+        # Показывает, что распознаётся на каждом сайте, ничего не записывая.
+        continue-on-error: true
+        run: |
+          if [ -n "${{ github.event.inputs.urls }}" ]; then
+            npm run catalog:inspect --workspace backend -- \
+              --url "${{ github.event.inputs.urls }}" \
+              --pages "${{ github.event.inputs.pages }}"
+          else
+            npm run catalog:inspect --workspace backend -- \
+              --sources "${{ github.event.inputs.sources || 'database/sources.json' }}"
+          fi
+
+      - name: Сборка каталога
+        id: build
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.urls }}" ]; then
+            ARGS="--url ${{ github.event.inputs.urls }}"
+            if [ -n "${{ github.event.inputs.pages }}" ]; then ARGS="$ARGS --pages ${{ github.event.inputs.pages }}"; fi
+          else
+            ARGS="--sources ${{ github.event.inputs.sources || 'database/sources.json' }}"
+          fi
+
+          ARGS="$ARGS --limit ${{ github.event.inputs.limit || '5000' }}"
+          ARGS="$ARGS --price-multiplier ${{ github.event.inputs.price_multiplier || '1' }}"
+          ARGS="$ARGS --out database/catalog.json"
+
+          if [ "${{ github.event.inputs.fallback_generate }}" != "false" ]; then
+            ARGS="$ARGS --fallback-generate"
+          fi
+          if [ "${{ github.event.inputs.ignore_robots }}" = "true" ]; then
+            ARGS="$ARGS --ignore-robots"
+          fi
+
+          echo "Аргументы: $ARGS"
+          npm run catalog:scrape --workspace backend -- $ARGS
+
+          COUNT=$(node -e "const c=require('./database/catalog.json');console.log(c.items.length)")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Собрано предметов: $COUNT"
+
+      - name: Проверка формата каталога
+        # Каталог должен без ошибок проходить валидацию импорта.
+        run: |
+          node -e "
+            const fs = require('fs');
+            const catalog = JSON.parse(fs.readFileSync('database/catalog.json', 'utf8'));
+            const items = catalog.items ?? catalog;
+            if (!Array.isArray(items) || items.length === 0) {
+              console.error('Каталог пуст');
+              process.exit(1);
+            }
+            const required = ['slug', 'name', 'weapon', 'rarity', 'priceCoins'];
+            const broken = items.filter((item) => required.some((field) => !item[field]));
+            if (broken.length > 0) {
+              console.error('Записи без обязательных полей:', broken.slice(0, 3));
+              process.exit(1);
+            }
+            const prices = items.map((item) => Number(item.priceCoins));
+            console.log('Предметов:', items.length);
+            console.log('Цены, монет:', Math.min(...prices).toFixed(0), '—', Math.max(...prices).toFixed(0));
+          "
+
+      - name: Публикация каталога
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-${{ github.run_number }}
+          path: |
+            database/catalog.json
+            backend/catalog-report.md
+          retention-days: 30
+
+      - name: Коммит каталога в репозиторий
+        # Вручную — по флажку, по расписанию — всегда (обновление цен).
+        if: github.event.inputs.commit == 'true' || github.event_name == 'schedule'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet database/catalog.json; then
+            echo "Каталог не изменился — коммит не нужен"
+            exit 0
+          fi
+
+          git add database/catalog.json
+          git commit -m "Каталог скинов: ${{ steps.build.outputs.count }} предметов (автосборка)"
+          git push
+
+      - name: Загрузка каталога в базу
+        # Выполняется, только если в репозитории задан секрет DATABASE_URL.
+        if: ${{ secrets.DATABASE_URL != '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ci_session_secret_0123456789abcdef0123456789abcdef
+          ADMIN_SECRET: ci_admin_secret_0123456789
+          TON_WALLET_ADDRESS: UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          TON_PROVIDER: mock
+        run: npm run items:import --workspace backend -- database/catalog.json

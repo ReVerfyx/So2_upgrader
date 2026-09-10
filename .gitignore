@@ -1,0 +1,48 @@
+# Зависимости
+node_modules/
+.pnp
+.pnp.js
+
+# Сборка
+dist/
+build/
+*.tsbuildinfo
+frontend/dist/
+backend/dist/
+artifact/
+
+# Переменные окружения и секреты
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Логи
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Кэши и временные файлы
+.cache/
+.temp/
+tmp/
+coverage/
+.vitest/
+.eslintcache
+
+# Данные локальной БД
+pgdata/
+docker/pgdata/
+
+# Редакторы и ОС
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Отчёт сборщика каталога (генерируется при каждом запуске)
+backend/catalog-report.md
+catalog-report.md

@@ -1,0 +1,28 @@
+{
+  "$comment": "Источники прайса скинов Standoff 2 для сборщика каталога. Обход выполняется в GitHub Actions (npm run catalog:scrape -- --sources database/sources.json). Скрапер уважает robots.txt и делает паузу между запросами. Отключить источник — enabled: false. Подобрать селекторы — режим inspect.",
+  "$fields": {
+    "name": "Название для отчёта",
+    "url": "Адрес страницы; {page} подставляется номером страницы",
+    "pages": "Диапазон страниц пагинации, например 1-10",
+    "config": "CSS-селекторы, если автоопределение не справилось",
+    "priceMultiplier": "Множитель, если цены не в рублях",
+    "enabled": "Участвует ли источник в обходе"
+  },
+  "sources": [
+    {
+      "name": "standoff-2.com — рынок",
+      "url": "https://standoff-2.com/%20market/",
+      "enabled": true
+    },
+    {
+      "name": "standoff-2.com — таблица цен",
+      "url": "https://standoff-2.com/shop/",
+      "enabled": true
+    },
+    {
+      "name": "standoff-2.com — категория «Рынок»",
+      "url": "https://standoff-2.com/category/market/",
+      "enabled": true
+    }
+  ]
+}

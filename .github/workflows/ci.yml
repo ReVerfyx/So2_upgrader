@@ -1,0 +1,143 @@
+name: CI
+
+# Проверка кода: типы, линтеры, тесты, сборка и подготовка артефакта развёртывания.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # -------------------------------------------------------------------------
+  quality:
+    name: Типы, линтеры и тесты
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stock2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Тестовое окружение: секреты не нужны, используются заведомо непубличные значения.
+      NODE_ENV: test
+      TEST_MODE: 'true'
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/stock2_test
+      SESSION_SECRET: ci_session_secret_0123456789abcdef0123456789abcdef
+      ADMIN_SECRET: ci_admin_secret_0123456789
+      TON_PROVIDER: mock
+      TON_WALLET_ADDRESS: EQci_test_wallet_address_not_a_real_wallet
+      TON_WATCHER_ENABLED: 'false'
+      APP_URL: http://localhost:5173
+
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Установка Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Проверка типов TypeScript
+        run: npm run typecheck
+
+      - name: Проверка ESLint
+        run: npm run lint
+
+      - name: Применение миграций
+        run: npm run migrate
+
+      - name: Тесты бэкенда
+        run: npm run test --workspace backend
+
+      - name: Тесты фронтенда
+        run: npm run test --workspace frontend
+
+  # -------------------------------------------------------------------------
+  build:
+    name: Сборка и артефакт развёртывания
+    runs-on: ubuntu-latest
+    needs: quality
+
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Установка Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Сборка бэкенда
+        run: npm run build --workspace backend
+
+      - name: Сборка фронтенда
+        # Параметры бренда берутся из переменных репозитория (Settings → Variables).
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_BRAND_NAME: ${{ vars.VITE_BRAND_NAME || 'STOCK2' }}
+          VITE_BRAND_TAGLINE: ${{ vars.VITE_BRAND_TAGLINE || 'UPGRADER STANDOFF 2' }}
+          VITE_TELEGRAM_URL: ${{ vars.VITE_TELEGRAM_URL || 'https://t.me/stock2_shop' }}
+        run: npm run build --workspace frontend
+
+      - name: Подготовка артефакта
+        run: |
+          mkdir -p artifact
+          cp -r backend/dist artifact/backend
+          cp -r frontend/dist artifact/frontend
+          cp -r migrations artifact/migrations
+          cp -r public artifact/public
+          cp package.json package-lock.json .env.example artifact/
+          cp backend/package.json artifact/backend-package.json
+          echo "Сборка ${{ github.sha }} от $(date -u +%Y-%m-%dT%H:%M:%SZ)" > artifact/BUILD_INFO.txt
+
+      - name: Публикация артефакта
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock2-build-${{ github.sha }}
+          path: artifact
+          retention-days: 14
+
+  # -------------------------------------------------------------------------
+  docker:
+    name: Проверка сборки Docker-образов
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Сборка образа бэкенда
+        run: docker build -f backend/Dockerfile -t stock2-backend:${{ github.sha }} .
+
+      - name: Сборка образа фронтенда
+        run: docker build -f frontend/Dockerfile -t stock2-frontend:${{ github.sha }} .

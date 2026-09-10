@@ -1,0 +1,10 @@
+{
+  "$comment": "Пример настройки скрапера под конкретный сайт-прайс. Селекторы подбираются в режиме inspect: npm run catalog:inspect --workspace backend -- --url <адрес>",
+  "itemSelector": ".market-item",
+  "nameSelector": ".market-item__title",
+  "priceSelector": ".market-item__price",
+  "imageSelector": "img",
+  "imageAttribute": "src",
+  "raritySelector": ".market-item__rarity",
+  "priceMultiplier": 1
+}

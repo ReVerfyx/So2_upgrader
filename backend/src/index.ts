@@ -19,6 +19,18 @@ async function main(): Promise<void> {
     await runMigrations();
   }
 
+  // Первичное наполнение базы: каталог предметов и администратор.
+  // Нужно для развёртывания в один клик на пустой базе.
+  if (process.env.SEED_ON_START === 'true') {
+    try {
+      const { bootstrapDatabase } = await import('./db/bootstrap');
+      await bootstrapDatabase();
+    } catch (error) {
+      // Ошибка наполнения не должна мешать запуску сайта.
+      logger.error('Не удалось выполнить первичное наполнение базы', { error: (error as Error).message });
+    }
+  }
+
   const app = createApp();
   const server = app.listen(env.port, () => {
     logger.info('Сервер запущен', {

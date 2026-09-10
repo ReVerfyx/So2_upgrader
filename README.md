@@ -113,7 +113,25 @@ npm run dev:frontend
 Администратор по умолчанию: `ADMIN_USERNAME` / `ADMIN_PASSWORD` из `.env`
 (в разработке — `admin` / `admin12345`). **Обязательно смените в production.**
 
-### 5. Запуск в production одним процессом
+### 5. Бесплатный запуск в интернете
+
+Проект собран в **один Docker-образ** (бэкенд раздаёт и API, и фронтенд),
+поэтому помещается в бесплатный тариф, где даётся один инстанс.
+
+| Что | Чем закрыть бесплатно |
+| --- | --- |
+| Приложение | **Koyeb** (не засыпает) или **Render** (проще, засыпает через 15 мин) |
+| База данных | **Neon** — 3 ГиБ, не истекает, без карты |
+| Домен | поддомен платформы (`*.koyeb.app`, `*.onrender.com`), `is-a.dev`, `eu.org`, DuckDNS |
+| HTTPS | выпускает платформа |
+
+В репозитории уже лежат `Dockerfile`, `render.yaml` (Render Blueprint) и
+`koyeb.yaml`. При первом запуске с `SEED_ON_START=true` сервис сам применит
+миграции, загрузит каталог и создаст администратора — сайт открывается сразу.
+
+Пошагово: **[docs/deploy-free.md](docs/deploy-free.md)**.
+
+### 6. Запуск в production одним процессом
 
 Бэкенд умеет сам раздавать собранный фронтенд — отдельный nginx не обязателен:
 
@@ -125,7 +143,7 @@ NODE_ENV=production SERVE_FRONTEND=true PORT=8080 npm run start --workspace back
 Сайт и API будут на одном адресе (`http://сервер:8080`), поэтому cookie
 остаются first-party. За обратным прокси с HTTPS оставьте `COOKIE_SECURE=true`.
 
-### 6. Запуск через Docker
+### 7. Запуск через Docker
 
 ```bash
 cp .env.example .env      # заполните POSTGRES_PASSWORD, SESSION_SECRET и др.
@@ -207,6 +225,8 @@ docker compose up -d --build
 | `TEST_MODE` | `true` включает `/api/dev/*`. В production принудительно отключается кодом |
 | `COOKIE_SECURE` | Флаг Secure у cookie сессии (по умолчанию включён в production). Отключайте только для http |
 | `SERVE_FRONTEND` | `true` — бэкенд сам раздаёт собранный фронтенд, отдельный nginx не нужен |
+| `SEED_ON_START` | `true` — при первом запуске на пустой базе загрузить каталог и создать администратора |
+| `CATALOG_FILE` | Путь к каталогу для первичной загрузки (по умолчанию `database/catalog.json`) |
 | `FRONTEND_DIR` | Папка со сборкой фронтенда (по умолчанию `frontend/dist`) |
 | `ITEMS_IMAGE_BASE_URL` | Базовый адрес изображений предметов |
 | `VITE_BRAND_NAME`, `VITE_BRAND_TAGLINE`, `VITE_TELEGRAM_URL` | Настройки бренда фронтенда |
@@ -477,6 +497,10 @@ DATABASE_URL=postgres://postgres@127.0.0.1:5432/stock2_test npm run test --works
 ---
 
 ## Свой домен
+
+Бесплатные варианты и пошаговая привязка — в
+[docs/deploy-free.md](docs/deploy-free.md). Ниже — вариант со своим
+сервером и nginx.
 
 1. **DNS.** Создайте A-запись на IP сервера: `@ → 1.2.3.4` и `www → 1.2.3.4`.
 2. **Переменные.** В `.env` на сервере:

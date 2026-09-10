@@ -1,0 +1,97 @@
+# ============================================================================
+#  Развёртывание STOCK2 на Render (бесплатный тариф).
+#
+#  Как применить:
+#    1. Render → New → Blueprint → указать этот репозиторий.
+#    2. Render прочитает этот файл и создаст сервис.
+#    3. Заполнить переменные, помеченные sync: false (секреты).
+#
+#  Важно про бесплатный тариф Render:
+#    • веб-сервис засыпает после 15 минут без запросов,
+#      первый запрос после сна ждёт около минуты;
+#    • бесплатная база PostgreSQL живёт 30 дней, потом удаляется —
+#      поэтому базу лучше держать в Neon (постоянная и бесплатная),
+#      см. docs/deploy-free.md.
+# ============================================================================
+services:
+  - type: web
+    name: stock2
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      - key: SERVE_FRONTEND
+        value: 'true'
+      - key: TRUST_PROXY
+        value: '1'
+      # Первый запуск: применить миграции и загрузить каталог
+      - key: SEED_ON_START
+        value: 'true'
+
+      # --- Секреты: заполняются в панели Render ---------------------------
+      # Строка подключения к PostgreSQL (рекомендуется Neon)
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: 'true'
+      # openssl rand -hex 32
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_SECRET
+        generateValue: true
+      # Логин и пароль первого администратора
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # --- Адрес сайта ----------------------------------------------------
+      # Подставьте адрес, который выдаст Render: https://<имя>.onrender.com
+      - key: APP_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+
+      # --- Приём платежей TON ---------------------------------------------
+      - key: TON_WALLET_ADDRESS
+        sync: false
+      - key: TON_API_KEY
+        sync: false
+      - key: TON_PROVIDER
+        value: toncenter
+      - key: TON_API_BASE_URL
+        value: https://toncenter.com
+      - key: TON_WATCHER_ENABLED
+        value: 'true'
+      - key: TON_POLL_INTERVAL_MS
+        value: '30000'
+
+      # --- Курс TON → монеты ----------------------------------------------
+      - key: RATE_AUTO_UPDATE
+        value: 'true'
+      - key: RATE_REFRESH_MINUTES
+        value: '15'
+      - key: RATE_SPREAD_PERCENT
+        value: '3'
+      - key: COIN_MINOR_PER_TON
+        value: '35000'
+
+      # --- Вход через Google (необязательно) -------------------------------
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+
+      # Тестовый режим в production отключается кодом принудительно
+      - key: TEST_MODE
+        value: 'false'

@@ -31,10 +31,13 @@ export interface WatcherStats {
 export async function runWatcherCycle(options: { force?: boolean } = {}): Promise<WatcherStats> {
   const stats: WatcherStats = { checked: 0, credited: 0, expired: 0, errors: 0 };
 
-  // Пока нет неоплаченных счетов, ходить в базу и в блокчейн незачем.
-  // Это экономит время работы serverless-базы, которое тарифицируется
-  // (Neon, Supabase и подобные засыпают при простое).
-  if (!options.force && !hasPendingDeposits()) {
+  // Режим экономии включается, только если интервал простоя задан больше
+  // обычного: тогда при отсутствии неоплаченных счетов цикл пропускается
+  // и serverless-база не будится впустую. По умолчанию режим выключен —
+  // блокчейн опрашивается постоянно.
+  const economyMode = env.ton.idlePollIntervalMs > env.ton.pollIntervalMs;
+
+  if (economyMode && !options.force && !hasPendingDeposits()) {
     logger.debug('Активных счетов нет, цикл проверки пропущен');
     return stats;
   }
@@ -121,8 +124,10 @@ export function startDepositWatcher(): void {
   };
 
   logger.info('Воркер проверки пополнений запущен', {
-    интервалАктивный: env.ton.pollIntervalMs,
-    интервалПростоя: env.ton.idlePollIntervalMs,
+    интервалМс: env.ton.pollIntervalMs,
+    ...(env.ton.idlePollIntervalMs > env.ton.pollIntervalMs
+      ? { интервалПростояМс: env.ton.idlePollIntervalMs }
+      : {}),
   });
 
   // При старте выясняем, остались ли неоплаченные счета с прошлого запуска.

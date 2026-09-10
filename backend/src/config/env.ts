@@ -114,13 +114,16 @@ export const env = {
     apiKey: str('TON_API_KEY', ''),
     apiBaseUrl: str('TON_API_BASE_URL', 'https://toncenter.com/api/v2'),
     minConfirmations: num('TON_MIN_CONFIRMATIONS', 1),
-    pollIntervalMs: num('TON_POLL_INTERVAL_MS', 20_000),
+    pollIntervalMs: num('TON_POLL_INTERVAL_MS', 30_000),
     /**
      * Интервал опроса, когда неоплаченных счетов нет.
-     * Длинная пауза позволяет serverless-базе заснуть и не расходовать
-     * бесплатные часы работы.
+     *
+     * По умолчанию равен обычному интервалу — блокчейн опрашивается
+     * постоянно. Увеличьте значение, если база тарифицируется по времени
+     * работы (Neon и подобные): тогда при отсутствии счетов воркер будет
+     * ждать дольше и не будет будить базу впустую.
      */
-    idlePollIntervalMs: num('TON_IDLE_POLL_INTERVAL_MS', 10 * 60_000),
+    idlePollIntervalMs: num('TON_IDLE_POLL_INTERVAL_MS', num('TON_POLL_INTERVAL_MS', 30_000)),
     watcherEnabled: bool('TON_WATCHER_ENABLED', !isTest),
   },
 

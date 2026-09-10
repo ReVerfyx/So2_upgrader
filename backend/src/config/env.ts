@@ -77,6 +77,13 @@ export const env = {
   database: {
     url: str('DATABASE_URL', isProduction ? undefined : 'postgres://postgres@127.0.0.1:5432/upgrader'),
     ssl: bool('DATABASE_SSL', false),
+    /**
+     * Корневой сертификат провайдера базы в формате PEM.
+     * Если задан, подлинность сервера проверяется по нему — это защищает
+     * от перехвата соединения. Aiven, Neon и другие выдают такой
+     * сертификат в панели управления.
+     */
+    caCert: str('DATABASE_CA_CERT', '').replace(/\\n/g, '\n'),
     poolMax: num('DATABASE_POOL_MAX', 10),
   },
 
